@@ -22,7 +22,7 @@ const NODE_ICONS = {
  * Styled to match the original Problem-Based SRS Navigator
  */
 export function renderGraphHtml(graphData, options = {}) {
-  const { title = 'SRS Navigator', analysisMode = 'customer-problem', selectedNodeId = null } = options;
+  const { title = 'SRS Navigator', analysisMode = 'customer-problem', selectedNodeId = null, isDemo = false } = options;
   const graphJSON = JSON.stringify(graphData);
 
   return `<!DOCTYPE html>
@@ -494,6 +494,180 @@ export function renderGraphHtml(graphData, options = {}) {
       pointer-events: none;
     }
 
+    /* Demo indicator badge */
+    .demo-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      background: oklch(0.85 0.12 80);
+      color: oklch(0.35 0.12 80);
+      margin-left: 6px;
+    }
+
+    /* Load Specification Modal */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: oklch(0 0 0 / 0.4);
+      z-index: 100;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      backdrop-filter: blur(2px);
+    }
+    .modal-overlay.active { display: flex; }
+    .modal {
+      background: var(--card);
+      border-radius: 12px;
+      width: 90%;
+      max-width: 540px;
+      max-height: 80vh;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 16px 48px oklch(0 0 0 / 0.15), 0 0 0 1px var(--border);
+      animation: modal-in 0.2s ease-out;
+    }
+    @keyframes modal-in {
+      from { opacity: 0; transform: translateY(8px) scale(0.98); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    .modal-header {
+      padding: var(--space-xl);
+      border-bottom: 1px solid var(--border);
+    }
+    .modal-header h2 {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: var(--space-xs);
+    }
+    .modal-header p {
+      font-size: 13px;
+      color: var(--muted-foreground);
+      line-height: 1.4;
+    }
+    .modal-close {
+      position: absolute;
+      top: var(--space-lg);
+      right: var(--space-lg);
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--muted-foreground);
+      transition: background var(--transition-fast), color var(--transition-fast);
+    }
+    .modal-close:hover { background: var(--hover); color: var(--foreground); }
+    .modal-close svg { width: 16px; height: 16px; }
+    .modal-tabs {
+      display: flex;
+      gap: 2px;
+      padding: 0 var(--space-xl);
+      padding-top: var(--space-lg);
+      border-bottom: 1px solid var(--border);
+    }
+    .modal-tab {
+      padding: var(--space-sm) var(--space-md);
+      font-size: 13px;
+      font-weight: 500;
+      font-family: inherit;
+      border: none;
+      background: transparent;
+      color: var(--muted-foreground);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+      transition: color var(--transition-fast), border-color var(--transition-fast);
+    }
+    .modal-tab:hover { color: var(--foreground); }
+    .modal-tab.active { color: var(--foreground); border-bottom-color: var(--primary); }
+    .modal-body {
+      padding: var(--space-xl);
+      overflow-y: auto;
+      flex: 1;
+    }
+    .modal-section-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted-foreground);
+      margin-bottom: var(--space-md);
+    }
+    .spec-card {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: var(--space-lg);
+      cursor: pointer;
+      transition: background var(--transition-fast), border-color var(--transition-fast);
+      margin-bottom: var(--space-md);
+    }
+    .spec-card:hover { background: var(--hover); border-color: oklch(0.70 0.05 240); }
+    .spec-card.current { border-color: var(--accent); background: oklch(0.97 0.02 200); }
+    .spec-card-header {
+      display: flex;
+      align-items: center;
+      gap: var(--space-sm);
+      margin-bottom: var(--space-sm);
+    }
+    .spec-card-header svg { color: var(--muted-foreground); flex-shrink: 0; }
+    .spec-card-title { font-size: 14px; font-weight: 600; }
+    .spec-card-desc {
+      font-size: 13px;
+      color: var(--muted-foreground);
+      line-height: 1.4;
+      margin-bottom: var(--space-sm);
+    }
+    .spec-card-meta {
+      font-size: 12px;
+      color: var(--muted);
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+    }
+    .modal-info {
+      font-size: 13px;
+      color: var(--muted-foreground);
+      line-height: 1.6;
+      padding: var(--space-lg);
+      background: oklch(0.97 0 0);
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+    }
+    .modal-info code {
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 12px;
+      background: oklch(0.93 0 0);
+      padding: 2px 5px;
+      border-radius: 3px;
+    }
+    .toast {
+      position: fixed;
+      bottom: var(--space-xl);
+      right: var(--space-xl);
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: var(--space-md) var(--space-lg);
+      box-shadow: 0 4px 16px oklch(0 0 0 / 0.1);
+      display: flex;
+      align-items: center;
+      gap: var(--space-sm);
+      font-size: 13px;
+      font-weight: 500;
+      z-index: 200;
+      transform: translateY(100px);
+      opacity: 0;
+      transition: transform 0.3s ease-out, opacity 0.3s ease-out;
+    }
+    .toast.show { transform: translateY(0); opacity: 1; }
+    .toast svg { color: oklch(0.55 0.18 145); flex-shrink: 0; }
+
     /* Responsive: narrow widths */
     @media (max-width: 720px) {
       .title-section h1 { font-size: 18px; }
@@ -529,6 +703,7 @@ export function renderGraphHtml(graphData, options = {}) {
       <button class="spec-btn" id="spec-btn">
         <svg width="16" height="16" viewBox="0 0 256 256" fill="currentColor"><path d="M213.66,82.34l-56-56A8,8,0,0,0,152,24H56A16,16,0,0,0,40,40V216a16,16,0,0,0,16,16H200a16,16,0,0,0,16-16V88A8,8,0,0,0,213.66,82.34ZM160,51.31,188.69,80H160ZM200,216H56V40h88V88a8,8,0,0,0,8,8h48V216Z"/></svg>
         <span>${escapeHtml(title)}</span>
+        ${isDemo ? '<span class="demo-badge">Demo</span>' : ''}
       </button>
       <div class="search-container">
         <svg class="search-icon" width="15" height="15" viewBox="0 0 256 256" fill="currentColor"><path d="M229.66,218.34l-50.07-50.06a88.11,88.11,0,1,0-11.31,11.31l50.06,50.07a8,8,0,0,0,11.32-11.32ZM40,112a72,72,0,1,1,72,72A72.08,72.08,0,0,1,40,112Z"/></svg>
@@ -564,6 +739,33 @@ export function renderGraphHtml(graphData, options = {}) {
       </div>
       <div class="detail-body" id="panel-content"></div>
     </div>
+  </div>
+
+  <!-- Load Specification Modal -->
+  <div class="modal-overlay" id="spec-modal">
+    <div class="modal" role="dialog" aria-labelledby="modal-title">
+      <div class="modal-header" style="position:relative">
+        <h2 id="modal-title">Load Specification</h2>
+        <p>Load a Problem-Based SRS from a URL, file, or paste content directly</p>
+        <button class="modal-close" id="modal-close" aria-label="Close modal">
+          <svg viewBox="0 0 256 256" fill="currentColor"><path d="M205.66,194.34a8,8,0,0,1-11.32,11.32L128,139.31,61.66,205.66a8,8,0,0,1-11.32-11.32L116.69,128,50.34,61.66A8,8,0,0,1,61.66,50.34L128,116.69l66.34-66.35a8,8,0,0,1,11.32,11.32L139.31,128Z"/></svg>
+        </button>
+      </div>
+      <div class="modal-tabs">
+        <button class="modal-tab active" data-tab="examples">Examples</button>
+        <button class="modal-tab" data-tab="agent">Via Agent</button>
+        <button class="modal-tab" data-tab="format">Format Guide</button>
+      </div>
+      <div class="modal-body" id="modal-body">
+        <!-- Content filled by JS -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast notification -->
+  <div class="toast" id="toast">
+    <svg width="16" height="16" viewBox="0 0 256 256" fill="currentColor"><path d="M173.66,98.34a8,8,0,0,1,0,11.32l-56,56a8,8,0,0,1-11.32,0l-24-24a8,8,0,0,1,11.32-11.32L112,148.69l50.34-50.35A8,8,0,0,1,173.66,98.34ZM232,128A104,104,0,1,1,128,24,104.11,104.11,0,0,1,232,128Zm-16,0a88,88,0,1,0-88,88A88.1,88.1,0,0,0,216,128Z"/></svg>
+    <span id="toast-text"></span>
   </div>
 
   <script>
@@ -957,6 +1159,116 @@ export function renderGraphHtml(graphData, options = {}) {
       simulation.force("center", d3.forceCenter(container.clientWidth / 2, container.clientHeight / 2));
       simulation.alpha(0.3).restart();
     });
+
+    // Spec modal (Load Specification dialog)
+    const specModal = document.getElementById("spec-modal");
+    const modalBody = document.getElementById("modal-body");
+    const isDemo = ${isDemo};
+    const specTitle = "${escapeHtml(title)}";
+
+    const modalTabs = {
+      examples: function() {
+        return '<div class="modal-section-title">Built-in Specifications</div>' +
+          '<div class="spec-card' + (specTitle === "CRM System" ? ' current' : '') + '" data-spec="crm">' +
+            '<div class="spec-card-header"><svg width="16" height="16" viewBox="0 0 256 256" fill="currentColor"><path d="M213.66,82.34l-56-56A8,8,0,0,0,152,24H56A16,16,0,0,0,40,40V216a16,16,0,0,0,16,16H200a16,16,0,0,0,16-16V88A8,8,0,0,0,213.66,82.34ZM160,51.31,188.69,80H160ZM200,216H56V40h88V88a8,8,0,0,0,8,8h48V216Z"/></svg><span class="spec-card-title">CRM System</span></div>' +
+            '<div class="spec-card-desc">Customer Relationship Management System Specification</div>' +
+            '<div class="spec-card-meta">Version 1.0 • Problem-Based SRS</div>' +
+          '</div>' +
+          '<div class="modal-section-title" style="margin-top:var(--space-xl)">How to load your own specification</div>' +
+          '<div class="modal-info">' +
+            '<p>Ask the Copilot agent to load your specification:</p>' +
+            '<p style="margin-top:8px"><code>Load my SRS spec from ./path/to/spec.json</code></p>' +
+            '<p style="margin-top:8px">Or use the <code>load_specification</code> action with your JSON data.</p>' +
+          '</div>';
+      },
+      agent: function() {
+        return '<div class="modal-info">' +
+          '<p><strong>Loading specifications via the Copilot agent:</strong></p>' +
+          '<p style="margin-top:12px">The agent can load specifications using these methods:</p>' +
+          '<ul style="margin-top:8px;padding-left:20px;line-height:1.8">' +
+            '<li>Ask: <code>Load my SRS from ./spec.json</code></li>' +
+            '<li>Ask: <code>Validate my specification</code></li>' +
+            '<li>Provide JSON directly in chat</li>' +
+            '<li>Point to a file path in your project</li>' +
+          '</ul>' +
+          '<p style="margin-top:12px">The agent uses the <code>load_specification</code> action which accepts:</p>' +
+          '<ul style="margin-top:8px;padding-left:20px;line-height:1.8">' +
+            '<li><code>filePath</code> — path to a .json spec file</li>' +
+            '<li><code>specification</code> — raw JSON object</li>' +
+            '<li><code>markdown</code> — markdown-formatted spec</li>' +
+          '</ul>' +
+        '</div>';
+      },
+      format: function() {
+        return '<div class="modal-info">' +
+          '<p><strong>Problem-Based SRS JSON Format:</strong></p>' +
+          '<pre style="margin-top:12px;font-family:JetBrains Mono,monospace;font-size:12px;line-height:1.5;white-space:pre-wrap">{\\n' +
+          '  "name": "My System",\\n' +
+          '  "description": "...",\\n' +
+          '  "version": "1.0",\\n' +
+          '  "problems": [\\n' +
+          '    { "id": "CP-1", "title": "...", "description": "..." }\\n' +
+          '  ],\\n' +
+          '  "needs": [\\n' +
+          '    { "id": "CN-1", "title": "...",\\n' +
+          '      "problemIds": ["CP-1"] }\\n' +
+          '  ],\\n' +
+          '  "functionalRequirements": [\\n' +
+          '    { "id": "FR-1", "title": "...",\\n' +
+          '      "needIds": ["CN-1"] }\\n' +
+          '  ],\\n' +
+          '  "nonFunctionalRequirements": [\\n' +
+          '    { "id": "NFR-1", "title": "...",\\n' +
+          '      "needIds": ["CN-1"] }\\n' +
+          '  ]\\n' +
+          '}</pre>' +
+          '<p style="margin-top:12px"><strong>Node types:</strong></p>' +
+          '<ul style="margin-top:8px;padding-left:20px;line-height:1.8">' +
+            '<li><strong>CP</strong> — Customer Problems</li>' +
+            '<li><strong>CN</strong> — Customer Needs (linked to problems)</li>' +
+            '<li><strong>FR</strong> — Functional Requirements (linked to needs)</li>' +
+            '<li><strong>NFR</strong> — Non-Functional Requirements (linked to needs)</li>' +
+          '</ul>' +
+        '</div>';
+      }
+    };
+
+    function openModal() {
+      specModal.classList.add("active");
+      renderModalTab("examples");
+    }
+    function closeModal() { specModal.classList.remove("active"); }
+    function renderModalTab(tab) {
+      document.querySelectorAll(".modal-tab").forEach(t => t.classList.toggle("active", t.dataset.tab === tab));
+      modalBody.innerHTML = modalTabs[tab]();
+      // Wire spec card clicks
+      document.querySelectorAll(".spec-card").forEach(card => {
+        card.addEventListener("click", () => {
+          showToast(card.querySelector(".spec-card-title").textContent + " loaded successfully");
+          closeModal();
+        });
+      });
+    }
+
+    document.getElementById("spec-btn").addEventListener("click", openModal);
+    document.getElementById("modal-close").addEventListener("click", closeModal);
+    specModal.addEventListener("click", (e) => { if (e.target === specModal) closeModal(); });
+    document.querySelectorAll(".modal-tab").forEach(tab => {
+      tab.addEventListener("click", () => renderModalTab(tab.dataset.tab));
+    });
+
+    // Toast
+    function showToast(message) {
+      const toast = document.getElementById("toast");
+      document.getElementById("toast-text").textContent = message;
+      toast.classList.add("show");
+      setTimeout(() => toast.classList.remove("show"), 3000);
+    }
+
+    // Show toast on load if it's the demo
+    if (isDemo) {
+      setTimeout(() => showToast("Demo: CRM System loaded — use the agent to load your own spec"), 1000);
+    }
 
     // Public API
     window.srsNavigator = {

@@ -116,7 +116,7 @@ const session = await joinSession({
                         }
 
                         // Rebuild the server HTML
-                        const html = renderGraphHtml(graphData, { title: specName });
+                        const html = renderGraphHtml(graphData, { title: specName, isDemo: false });
                         entry.graphData = graphData;
                         entry.specName = specName;
                         entry.html = html;
@@ -256,6 +256,7 @@ const session = await joinSession({
                 }
 
                 let graphData, specName;
+                let isDemo = false;
                 const input = ctx.input || {};
 
                 if (input.filePath) {
@@ -273,11 +274,13 @@ const session = await joinSession({
                     const result = loadAndBuildGraph(DEMO_SPEC);
                     graphData = result.graphData;
                     specName = result.specName;
+                    isDemo = true;
                 }
 
                 const html = renderGraphHtml(graphData, {
                     title: specName,
-                    analysisMode: input.analysisMode || "all"
+                    analysisMode: input.analysisMode || "all",
+                    isDemo
                 });
 
                 const server = createServer((req, res) => {
