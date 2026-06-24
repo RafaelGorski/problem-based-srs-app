@@ -34,12 +34,12 @@ describe("renderGraphHtml", () => {
 
   it("uses the provided title in spec button", () => {
     const html = renderGraphHtml(sampleGraph, { title: "My Custom Title" });
-    assert.ok(html.includes("Specification: My Custom Title"));
+    assert.ok(html.includes("My Custom Title"));
   });
 
   it("defaults title to SRS Navigator", () => {
     const html = renderGraphHtml(sampleGraph);
-    assert.ok(html.includes("Specification: SRS Navigator"));
+    assert.ok(html.includes("SRS Navigator"));
   });
 
   it("includes analysis mode buttons", () => {
@@ -59,7 +59,7 @@ describe("renderGraphHtml", () => {
   it("includes search input with placeholder", () => {
     const html = renderGraphHtml(sampleGraph);
     assert.ok(html.includes('id="search"'));
-    assert.ok(html.includes('placeholder="Search requirements..."'));
+    assert.ok(html.includes('placeholder="Search nodes'));
   });
 
   it("includes detail panel structure", () => {
@@ -125,7 +125,7 @@ describe("renderGraphHtml", () => {
   it("includes gradient SVG background", () => {
     const html = renderGraphHtml(sampleGraph);
     assert.ok(html.includes("radial-gradient"));
-    assert.ok(html.includes("linear-gradient"));
+    assert.ok(html.includes("oklch(0.975"));
   });
 
   it("uses dashed stroke for links", () => {

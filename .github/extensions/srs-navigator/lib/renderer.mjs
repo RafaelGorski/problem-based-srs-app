@@ -43,20 +43,30 @@ export function renderGraphHtml(graphData, options = {}) {
       --card-foreground: oklch(0.15 0.02 240);
       --primary: oklch(0.35 0.12 265);
       --primary-foreground: oklch(0.98 0 0);
-      --secondary: oklch(0.55 0.02 240);
+      --secondary: oklch(0.45 0.02 240);
       --muted: oklch(0.75 0.01 240);
-      --muted-foreground: oklch(0.45 0.02 240);
-      --accent: oklch(0.65 0.15 200);
-      --border: oklch(0.85 0.01 240);
+      --muted-foreground: oklch(0.40 0.02 240);
+      --accent: oklch(0.55 0.15 200);
+      --border: oklch(0.87 0.01 240);
+      --hover: oklch(0.95 0.005 240);
+      --focus: oklch(0.55 0.15 200);
       --node-problem: oklch(0.65 0.19 50);
       --node-need: oklch(0.60 0.15 200);
       --node-fr: oklch(0.55 0.18 265);
       --node-nfr: oklch(0.68 0.15 330);
       --radius: 0.5rem;
+      --space-xs: 4px;
+      --space-sm: 8px;
+      --space-md: 12px;
+      --space-lg: 16px;
+      --space-xl: 24px;
+      --space-2xl: 32px;
+      --transition-fast: 0.15s ease-out;
+      --transition-normal: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
     }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
-      font-family: 'Space Grotesk', sans-serif;
+      font-family: 'Space Grotesk', system-ui, -apple-system, sans-serif;
       background: var(--background);
       color: var(--foreground);
       overflow: hidden;
@@ -64,6 +74,23 @@ export function renderGraphHtml(graphData, options = {}) {
       display: flex;
       flex-direction: column;
     }
+
+    /* Focus ring for keyboard navigation */
+    :focus-visible {
+      outline: 2px solid var(--focus);
+      outline-offset: 2px;
+    }
+    :focus:not(:focus-visible) { outline: none; }
+
+    /* Reduced motion */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+
     .toolbar {
       border-bottom: 1px solid var(--border);
       background: var(--card);
@@ -72,58 +99,72 @@ export function renderGraphHtml(graphData, options = {}) {
     .toolbar-row {
       display: flex;
       align-items: center;
-      gap: 12px;
-      padding: 12px 16px;
+      gap: var(--space-md);
+      padding: var(--space-md) var(--space-lg);
     }
     .toolbar-row:first-child {
       justify-content: space-between;
     }
     .toolbar-row:last-child {
       padding-top: 0;
-      padding-bottom: 12px;
+      padding-bottom: var(--space-md);
+      flex-wrap: wrap;
     }
     .title-section {
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: var(--space-md);
+      min-width: 0;
     }
     .title-section h1 {
-      font-size: 24px;
+      font-size: 22px;
       font-weight: 700;
       color: var(--foreground);
       letter-spacing: -0.02em;
+      white-space: nowrap;
     }
     .badge {
       display: inline-flex;
       align-items: center;
-      padding: 4px 10px;
+      padding: var(--space-xs) var(--space-sm);
       border-radius: 9999px;
       font-size: 12px;
-      font-weight: 500;
-      background: var(--secondary);
-      color: var(--primary-foreground);
+      font-weight: 600;
+      background: oklch(0.55 0.12 50);
+      color: white;
+      white-space: nowrap;
     }
     .btn {
       display: inline-flex;
       align-items: center;
-      gap: 8px;
-      padding: 6px 12px;
+      gap: 6px;
+      padding: 6px var(--space-md);
       border-radius: var(--radius);
       border: 1px solid var(--border);
       background: transparent;
       color: var(--foreground);
-      font-size: 14px;
+      font-size: 13px;
       font-weight: 500;
-      font-family: 'Space Grotesk', sans-serif;
+      font-family: inherit;
       cursor: pointer;
-      transition: all 0.15s;
+      transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast), box-shadow var(--transition-fast);
       white-space: nowrap;
+      user-select: none;
     }
-    .btn:hover { background: oklch(0.95 0.01 240); }
-    .btn.active { background: var(--primary); color: var(--primary-foreground); border-color: var(--primary); }
+    .btn:hover { background: var(--hover); }
+    .btn:active { background: oklch(0.92 0.01 240); }
+    .btn.active {
+      background: var(--primary);
+      color: var(--primary-foreground);
+      border-color: var(--primary);
+    }
+    .btn[disabled] {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
     .btn-icon {
-      width: 36px;
-      height: 36px;
+      width: 34px;
+      height: 34px;
       padding: 0;
       display: flex;
       align-items: center;
@@ -131,120 +172,152 @@ export function renderGraphHtml(graphData, options = {}) {
       border-radius: var(--radius);
       border: 1px solid var(--border);
       background: var(--card);
+      color: var(--foreground);
       cursor: pointer;
-      transition: all 0.15s;
+      transition: background var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast);
     }
-    .btn-icon:hover { background: oklch(0.95 0.01 240); }
+    .btn-icon:hover { background: var(--hover); }
+    .btn-icon:active { background: oklch(0.92 0.01 240); }
+    .btn-icon svg { width: 16px; height: 16px; }
     .btn-group {
       display: flex;
       align-items: center;
       border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 4px;
+      border-radius: var(--radius);
+      padding: 3px;
       background: oklch(0.97 0 0);
       gap: 2px;
     }
-    .btn-group .btn { border: none; height: 32px; }
-    .btn-group .btn.active { box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    .btn-group .btn {
+      border: none;
+      height: 30px;
+      border-radius: calc(var(--radius) - 2px);
+      font-size: 13px;
+    }
+    .btn-group .btn.active { box-shadow: 0 1px 3px oklch(0 0 0 / 0.08); }
     .search-container {
       position: relative;
       flex: 1;
-      max-width: 400px;
+      min-width: 140px;
+      max-width: 320px;
     }
     .search-icon {
       position: absolute;
-      left: 12px;
+      left: var(--space-sm);
       top: 50%;
       transform: translateY(-50%);
       color: var(--muted-foreground);
+      pointer-events: none;
     }
     .search-input {
       width: 100%;
-      padding: 8px 12px 8px 40px;
+      padding: 6px var(--space-sm) 6px 32px;
       border: 1px solid var(--border);
       border-radius: var(--radius);
-      font-size: 14px;
-      font-family: 'Space Grotesk', sans-serif;
+      font-size: 13px;
+      font-family: inherit;
       background: var(--card);
       color: var(--foreground);
-      height: 40px;
+      height: 34px;
+      transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
     }
-    .search-input:focus { outline: 2px solid var(--accent); border-color: transparent; }
+    .search-input:focus { outline: none; border-color: var(--focus); box-shadow: 0 0 0 3px oklch(0.55 0.15 200 / 0.15); }
     .search-input::placeholder { color: var(--muted-foreground); }
     .spec-btn {
       display: flex;
       align-items: center;
-      gap: 8px;
-      padding: 8px 12px;
+      gap: 6px;
+      padding: 6px var(--space-md);
       border: 1px solid var(--border);
       border-radius: var(--radius);
       background: var(--card);
       cursor: pointer;
-      font-size: 14px;
+      font-size: 13px;
       font-weight: 500;
-      height: 40px;
-      font-family: 'Space Grotesk', sans-serif;
+      height: 34px;
+      font-family: inherit;
+      color: var(--foreground);
+      transition: background var(--transition-fast);
     }
-    .spec-btn:hover { background: oklch(0.95 0.01 240); }
+    .spec-btn:hover { background: var(--hover); }
+    .spec-btn svg { flex-shrink: 0; }
     .analysis-section {
       display: flex;
       align-items: center;
       gap: 0;
       border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 4px;
+      border-radius: var(--radius);
+      padding: 3px;
       background: oklch(0.97 0 0);
-      height: 40px;
+      height: 34px;
     }
-    .analysis-section .btn { border: none; height: 32px; }
-    .analysis-section .btn.active { box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    .analysis-section .btn {
+      border: none;
+      height: 28px;
+      border-radius: calc(var(--radius) - 2px);
+      font-size: 13px;
+    }
+    .analysis-section .btn.active { box-shadow: 0 1px 3px oklch(0 0 0 / 0.08); }
     .type-indicators {
       display: flex;
       align-items: center;
-      gap: 8px;
-      margin-left: 8px;
-      padding-left: 8px;
+      gap: var(--space-sm);
+      margin-left: var(--space-sm);
+      padding-left: var(--space-sm);
       border-left: 1px solid var(--border);
     }
     .type-indicator {
       display: flex;
       align-items: center;
-      gap: 4px;
+      gap: var(--space-xs);
     }
     .type-dot {
-      width: 20px;
-      height: 20px;
-      border-radius: 4px;
+      width: 22px;
+      height: 22px;
+      border-radius: 5px;
       display: flex;
       align-items: center;
       justify-content: center;
     }
-    .type-dot svg { width: 12px; height: 12px; }
-    .type-label { font-size: 12px; font-weight: 500; }
+    .type-dot svg { width: 14px; height: 14px; }
+    .type-label { font-size: 12px; font-weight: 600; }
     .graph-container {
       flex: 1;
       position: relative;
       overflow: hidden;
     }
-    svg {
+    #graph-svg {
       width: 100%;
       height: 100%;
       background:
-        radial-gradient(circle at 20% 30%, oklch(0.75 0.05 200 / 0.1) 0%, transparent 50%),
-        radial-gradient(circle at 80% 70%, oklch(0.75 0.05 280 / 0.1) 0%, transparent 50%),
-        linear-gradient(135deg, oklch(0.98 0 0) 0%, oklch(0.96 0.01 240) 100%);
+        radial-gradient(circle at 20% 30%, oklch(0.80 0.03 200 / 0.08) 0%, transparent 50%),
+        radial-gradient(circle at 80% 70%, oklch(0.80 0.03 280 / 0.08) 0%, transparent 50%),
+        oklch(0.975 0.003 240);
     }
     .zoom-controls {
       position: absolute;
-      top: 16px;
-      left: 16px;
+      top: var(--space-lg);
+      left: var(--space-lg);
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: 6px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: var(--space-xs);
+      box-shadow: 0 2px 8px oklch(0 0 0 / 0.06);
     }
+    .zoom-controls .btn-icon {
+      border: none;
+      width: 30px;
+      height: 30px;
+      border-radius: calc(var(--radius) - 2px);
+    }
+    .zoom-controls .btn-icon svg { width: 15px; height: 15px; }
     .node { cursor: pointer; }
+    .node:hover { filter: brightness(1.04); }
     .node text.node-id {
-      font-family: 'JetBrains Mono', monospace;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
       font-size: 11px;
       font-weight: 600;
       fill: var(--foreground);
@@ -252,54 +325,63 @@ export function renderGraphHtml(graphData, options = {}) {
       pointer-events: none;
     }
     .node text.node-label {
-      font-family: 'Space Grotesk', sans-serif;
+      font-family: 'Space Grotesk', system-ui, sans-serif;
       font-size: 10px;
       font-weight: 500;
-      fill: var(--foreground);
+      fill: oklch(0.30 0.02 240);
       text-anchor: middle;
       pointer-events: none;
     }
     .link {
-      stroke: oklch(0.65 0.05 240);
-      stroke-width: 2;
-      stroke-opacity: 0.4;
+      stroke: oklch(0.70 0.03 240);
+      stroke-width: 1.5;
+      stroke-opacity: 0.35;
       stroke-dasharray: 5,5;
       fill: none;
     }
-    /* Detail Panel - slide from right, full height */
+
+    /* Detail Panel — uses visibility+opacity for animatable show/hide */
     .detail-panel {
       position: absolute;
       top: 0;
       right: 0;
-      width: 384px;
+      width: 360px;
       height: 100%;
       background: var(--card);
       border-left: 1px solid var(--border);
-      box-shadow: -4px 0 24px rgba(0,0,0,0.08);
-      display: none;
+      box-shadow: -4px 0 24px oklch(0 0 0 / 0.06);
+      display: flex;
       flex-direction: column;
       z-index: 10;
       transform: translateX(100%);
-      transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      visibility: hidden;
+      opacity: 0;
+      transition: transform var(--transition-normal), opacity var(--transition-normal), visibility 0s 0.25s;
     }
     .detail-panel.active {
-      display: flex;
       transform: translateX(0);
+      visibility: visible;
+      opacity: 1;
+      transition: transform var(--transition-normal), opacity var(--transition-normal), visibility 0s 0s;
     }
     .detail-header {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 16px;
+      padding: var(--space-lg);
       border-bottom: 1px solid var(--border);
+      gap: var(--space-sm);
     }
     .detail-header h2 {
-      font-size: 20px;
-      font-weight: 700;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--muted-foreground);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
     }
     .detail-close {
-      width: 32px;
-      height: 32px;
+      width: 28px;
+      height: 28px;
       border-radius: 6px;
       border: none;
       background: transparent;
@@ -308,87 +390,118 @@ export function renderGraphHtml(graphData, options = {}) {
       align-items: center;
       justify-content: center;
       color: var(--muted-foreground);
-      font-size: 20px;
+      transition: background var(--transition-fast), color var(--transition-fast);
+      flex-shrink: 0;
     }
-    .detail-close:hover { background: oklch(0.95 0.01 240); color: var(--foreground); }
+    .detail-close:hover { background: var(--hover); color: var(--foreground); }
+    .detail-close svg { width: 16px; height: 16px; }
     .detail-body {
       flex: 1;
       overflow-y: auto;
-      padding: 24px;
+      padding: var(--space-xl);
     }
+    .detail-body::-webkit-scrollbar { width: 6px; }
+    .detail-body::-webkit-scrollbar-track { background: transparent; }
+    .detail-body::-webkit-scrollbar-thumb { background: oklch(0.80 0 0); border-radius: 3px; }
+    .detail-body::-webkit-scrollbar-thumb:hover { background: oklch(0.70 0 0); }
     .detail-body .node-badge {
-      display: inline-block;
-      padding: 4px 10px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: var(--space-xs) var(--space-sm);
       border-radius: 9999px;
       font-size: 12px;
-      font-weight: 500;
-      margin-bottom: 12px;
+      font-weight: 600;
+      margin-bottom: var(--space-md);
       color: white;
     }
+    .detail-body .node-badge svg { width: 14px; height: 14px; }
     .detail-body .node-id-text {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 14px;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 13px;
       color: var(--muted-foreground);
-      margin-bottom: 4px;
+      margin-bottom: var(--space-xs);
     }
     .detail-body .node-title {
-      font-size: 24px;
+      font-size: 20px;
       font-weight: 700;
       line-height: 1.3;
-      margin-bottom: 16px;
+      margin-bottom: var(--space-lg);
+      text-wrap: balance;
     }
     .detail-body .separator {
       height: 1px;
       background: var(--border);
-      margin: 16px 0;
+      margin: var(--space-lg) 0;
     }
     .detail-body .section-title {
-      font-size: 12px;
+      font-size: 11px;
       font-weight: 600;
       text-transform: uppercase;
-      letter-spacing: 0.05em;
+      letter-spacing: 0.06em;
       color: var(--muted-foreground);
-      margin-bottom: 8px;
+      margin-bottom: var(--space-sm);
     }
     .detail-body .description {
       font-size: 14px;
-      line-height: 1.6;
+      line-height: 1.65;
       color: var(--foreground);
       white-space: pre-wrap;
     }
     .complexity-bar {
       display: flex;
       align-items: center;
-      gap: 4px;
+      gap: 3px;
     }
     .complexity-bar .bar {
-      height: 12px;
-      width: 32px;
-      border-radius: 4px;
+      height: 10px;
+      width: 28px;
+      border-radius: 3px;
+      transition: background var(--transition-fast);
     }
     .complexity-bar .bar.filled { background: var(--accent); }
-    .complexity-bar .bar.empty { background: oklch(0.90 0 0); }
-    .complexity-bar .level { margin-left: 8px; font-size: 14px; color: var(--muted-foreground); }
-    .connections-section { margin-top: 4px; }
-    .conn-direction { font-size: 12px; color: var(--muted-foreground); margin-bottom: 8px; }
-    .conn-badges { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+    .complexity-bar .bar.empty { background: oklch(0.92 0 0); }
+    .complexity-bar .level {
+      margin-left: var(--space-sm);
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--muted-foreground);
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+    }
+    .connections-section { margin-top: var(--space-xs); }
+    .conn-direction {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--muted-foreground);
+      margin-bottom: var(--space-sm);
+    }
+    .conn-badges { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: var(--space-md); }
     .conn-badge {
       display: inline-flex;
       align-items: center;
-      padding: 4px 10px;
+      padding: var(--space-xs) var(--space-sm);
       border-radius: 6px;
-      border: 1px solid;
-      font-family: 'JetBrains Mono', monospace;
+      border: 1.5px solid;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
       font-size: 12px;
-      font-weight: 500;
+      font-weight: 600;
       cursor: pointer;
-      transition: background 0.15s;
+      transition: background var(--transition-fast), box-shadow var(--transition-fast);
     }
-    .conn-badge:hover { background: oklch(0.95 0 0); }
+    .conn-badge:hover { box-shadow: 0 1px 4px oklch(0 0 0 / 0.08); }
     /* Hull polygon for selection */
     .hull-path {
       pointer-events: none;
-      transition: opacity 0.4s;
+    }
+
+    /* Responsive: narrow widths */
+    @media (max-width: 720px) {
+      .title-section h1 { font-size: 18px; }
+      .badge { font-size: 11px; }
+      .toolbar-row { gap: var(--space-sm); padding: var(--space-sm) var(--space-md); }
+      .search-container { max-width: none; min-width: 100px; }
+      .detail-panel { width: 100%; }
+      .type-indicators { display: none; }
     }
   </style>
 </head>
@@ -414,12 +527,12 @@ export function renderGraphHtml(graphData, options = {}) {
     </div>
     <div class="toolbar-row">
       <button class="spec-btn" id="spec-btn">
-        <svg width="18" height="18" viewBox="0 0 256 256" fill="currentColor"><path d="M245,110.64A16,16,0,0,0,232,104H216V88a16,16,0,0,0-16-16H130.67L102.94,51.2a16.14,16.14,0,0,0-9.6-3.2H40A16,16,0,0,0,24,64V208h0a8,8,0,0,0,8,8H211.1a8,8,0,0,0,7.59-5.47l28.49-85.47A16.05,16.05,0,0,0,245,110.64Z"/></svg>
-        <span>Specification: ${escapeHtml(title)}</span>
+        <svg width="16" height="16" viewBox="0 0 256 256" fill="currentColor"><path d="M213.66,82.34l-56-56A8,8,0,0,0,152,24H56A16,16,0,0,0,40,40V216a16,16,0,0,0,16,16H200a16,16,0,0,0,16-16V88A8,8,0,0,0,213.66,82.34ZM160,51.31,188.69,80H160ZM200,216H56V40h88V88a8,8,0,0,0,8,8h48V216Z"/></svg>
+        <span>${escapeHtml(title)}</span>
       </button>
       <div class="search-container">
-        <svg class="search-icon" width="18" height="18" viewBox="0 0 256 256" fill="currentColor"><path d="M229.66,218.34l-50.07-50.06a88.11,88.11,0,1,0-11.31,11.31l50.06,50.07a8,8,0,0,0,11.32-11.32ZM40,112a72,72,0,1,1,72,72A72.08,72.08,0,0,1,40,112Z"/></svg>
-        <input class="search-input" type="text" placeholder="Search requirements..." id="search"/>
+        <svg class="search-icon" width="15" height="15" viewBox="0 0 256 256" fill="currentColor"><path d="M229.66,218.34l-50.07-50.06a88.11,88.11,0,1,0-11.31,11.31l50.06,50.07a8,8,0,0,0,11.32-11.32ZM40,112a72,72,0,1,1,72,72A72.08,72.08,0,0,1,40,112Z"/></svg>
+        <input class="search-input" type="text" placeholder="Search nodes…" id="search" aria-label="Search nodes"/>
       </div>
       <div class="analysis-section">
         <button class="btn ${analysisMode === 'customer-problem' ? 'active' : ''}" data-mode="customer-problem">Problem Focus</button>
@@ -432,20 +545,22 @@ export function renderGraphHtml(graphData, options = {}) {
   <div class="graph-container" id="graph-container">
     <svg id="graph-svg"></svg>
     <div class="zoom-controls">
-      <button class="btn-icon" id="zoom-in" title="Zoom In">
-        <svg width="18" height="18" viewBox="0 0 256 256" fill="currentColor"><path d="M229.66,218.34l-50.07-50.06a88.11,88.11,0,1,0-11.31,11.31l50.06,50.07a8,8,0,0,0,11.32-11.32ZM40,112a72,72,0,1,1,72,72A72.08,72.08,0,0,1,40,112Zm104,0a8,8,0,0,1-8,8H120v16a8,8,0,0,1-16,0V120H88a8,8,0,0,1,0-16h16V88a8,8,0,0,1,16,0v16h16A8,8,0,0,1,144,112Z"/></svg>
+      <button class="btn-icon" id="zoom-in" title="Zoom in" aria-label="Zoom in">
+        <svg viewBox="0 0 256 256" fill="currentColor"><path d="M229.66,218.34l-50.07-50.06a88.11,88.11,0,1,0-11.31,11.31l50.06,50.07a8,8,0,0,0,11.32-11.32ZM40,112a72,72,0,1,1,72,72A72.08,72.08,0,0,1,40,112Zm104,0a8,8,0,0,1-8,8H120v16a8,8,0,0,1-16,0V120H88a8,8,0,0,1,0-16h16V88a8,8,0,0,1,16,0v16h16A8,8,0,0,1,144,112Z"/></svg>
       </button>
-      <button class="btn-icon" id="zoom-out" title="Zoom Out">
-        <svg width="18" height="18" viewBox="0 0 256 256" fill="currentColor"><path d="M229.66,218.34l-50.07-50.06a88.11,88.11,0,1,0-11.31,11.31l50.06,50.07a8,8,0,0,0,11.32-11.32ZM40,112a72,72,0,1,1,72,72A72.08,72.08,0,0,1,40,112Zm104,0a8,8,0,0,1-8,8H88a8,8,0,0,1,0-16h48A8,8,0,0,1,144,112Z"/></svg>
+      <button class="btn-icon" id="zoom-out" title="Zoom out" aria-label="Zoom out">
+        <svg viewBox="0 0 256 256" fill="currentColor"><path d="M229.66,218.34l-50.07-50.06a88.11,88.11,0,1,0-11.31,11.31l50.06,50.07a8,8,0,0,0,11.32-11.32ZM40,112a72,72,0,1,1,72,72A72.08,72.08,0,0,1,40,112Zm104,0a8,8,0,0,1-8,8H88a8,8,0,0,1,0-16h48A8,8,0,0,1,144,112Z"/></svg>
       </button>
-      <button class="btn-icon" id="zoom-reset" title="Reset Zoom">
-        <svg width="18" height="18" viewBox="0 0 256 256" fill="currentColor"><path d="M216,48V96a8,8,0,0,1-8,8H160a8,8,0,0,1,0-16h28.69L163.31,62.63A80,80,0,0,0,48,128a8,8,0,0,1-16,0A96,96,0,0,1,174.63,51.37L200,76.69V48a8,8,0,0,1,16,0ZM224,120a8,8,0,0,0-8,8A80,80,0,0,1,92.69,193.37L68,168H96a8,8,0,0,0,0-16H48a8,8,0,0,0-8,8v48a8,8,0,0,0,16,0V179.31l25.37,25.32A96,96,0,0,0,232,128,8,8,0,0,0,224,120Z"/></svg>
+      <button class="btn-icon" id="zoom-reset" title="Reset zoom" aria-label="Reset zoom">
+        <svg viewBox="0 0 256 256" fill="currentColor"><path d="M216,48V96a8,8,0,0,1-8,8H160a8,8,0,0,1,0-16h28.69L163.31,62.63A80,80,0,0,0,48,128a8,8,0,0,1-16,0A96,96,0,0,1,174.63,51.37L200,76.69V48a8,8,0,0,1,16,0ZM224,120a8,8,0,0,0-8,8A80,80,0,0,1,92.69,193.37L68,168H96a8,8,0,0,0,0-16H48a8,8,0,0,0-8,8v48a8,8,0,0,0,16,0V179.31l25.37,25.32A96,96,0,0,0,232,128,8,8,0,0,0,224,120Z"/></svg>
       </button>
     </div>
     <div class="detail-panel" id="detail-panel">
       <div class="detail-header">
-        <h2>Details</h2>
-        <button class="detail-close" id="close-panel">&times;</button>
+        <h2 id="detail-header-label">Node Details</h2>
+        <button class="detail-close" id="close-panel" aria-label="Close details panel">
+          <svg viewBox="0 0 256 256" fill="currentColor"><path d="M205.66,194.34a8,8,0,0,1-11.32,11.32L128,139.31,61.66,205.66a8,8,0,0,1-11.32-11.32L116.69,128,50.34,61.66A8,8,0,0,1,61.66,50.34L128,116.69l66.34-66.35a8,8,0,0,1,11.32,11.32L139.31,128Z"/></svg>
+        </button>
       </div>
       <div class="detail-body" id="panel-content"></div>
     </div>
@@ -499,6 +614,11 @@ export function renderGraphHtml(graphData, options = {}) {
     const height = container.clientHeight;
     const g = svg.append("g");
 
+    // SVG defs for reusable filters
+    const defs = svg.append("defs");
+    const shadow = defs.append("filter").attr("id", "node-shadow").attr("x", "-30%").attr("y", "-30%").attr("width", "160%").attr("height", "160%");
+    shadow.append("feDropShadow").attr("dx", 0).attr("dy", 1).attr("stdDeviation", 3).attr("flood-color", "oklch(0 0 0 / 0.1)");
+
     // Zoom
     const zoom = d3.zoom().scaleExtent([0.1, 4]).on("zoom", (event) => {
       g.attr("transform", event.transform);
@@ -547,22 +667,21 @@ export function renderGraphHtml(graphData, options = {}) {
         .on("drag", dragged)
         .on("end", dragended));
 
-    // Background rect for selection highlight
+    // Node background plate (rounded rect behind icon)
     nodeElements.append("rect")
-      .attr("x", -35).attr("y", -35)
-      .attr("width", 70).attr("height", 70)
-      .attr("rx", 12).attr("ry", 12)
-      .attr("fill", d => nodeColors[d.type]?.fill || "#999")
-      .attr("fill-opacity", 0)
-      .attr("stroke", "transparent")
-      .attr("stroke-width", 0);
+      .attr("x", -22).attr("y", -22)
+      .attr("width", 44).attr("height", 44)
+      .attr("rx", 10).attr("ry", 10)
+      .attr("fill", "white")
+      .attr("stroke", d => nodeColors[d.type]?.stroke || "#ccc")
+      .attr("stroke-width", 1.5)
+      .attr("filter", "url(#node-shadow)");
 
     // Icon via foreignObject (like original)
     nodeElements.append("foreignObject")
       .attr("x", -20).attr("y", -20)
       .attr("width", 40).attr("height", 40)
       .attr("pointer-events", "none")
-      .attr("style", "filter: drop-shadow(0 2px 8px oklch(0 0 0 / 0.15))")
       .html(d => '<div style="width:40px;height:40px;display:flex;align-items:center;justify-content:center;color:' + (nodeColors[d.type]?.fill || '#666') + '">' + (nodeIcons[d.type] || '') + '</div>');
 
     // Node ID text
@@ -627,6 +746,9 @@ export function renderGraphHtml(graphData, options = {}) {
     function showDetail(node) {
       panel.classList.add("active");
       const colors = nodeColors[node.type];
+      const icon = nodeIcons[node.type] || '';
+      const smallIcon = icon.replace('width="28" height="28"', 'width="14" height="14"');
+      document.getElementById("detail-header-label").textContent = colors.fullLabel;
       const upstream = [];
       const downstream = [];
       for (const link of links) {
@@ -636,12 +758,12 @@ export function renderGraphHtml(graphData, options = {}) {
         if (src === node.id) downstream.push(tgt);
       }
 
-      let html = '<span class="node-badge" style="background:' + colors.fill + '">' + colors.fullLabel + '</span>';
+      let html = '<span class="node-badge" style="background:' + colors.fill + '">' + smallIcon + ' ' + colors.fullLabel + '</span>';
       html += '<div class="node-id-text">' + node.id + '</div>';
       html += '<h3 class="node-title">' + escapeHtml(node.label) + '</h3>';
       html += '<div class="separator"></div>';
       html += '<div class="section-title">Description</div>';
-      html += '<p class="description">' + escapeHtml(node.data?.description || '') + '</p>';
+      html += '<p class="description">' + escapeHtml(node.data?.description || 'No description available.') + '</p>';
 
       if (node.complexity) {
         html += '<div class="separator"></div>';
@@ -762,18 +884,13 @@ export function renderGraphHtml(graphData, options = {}) {
 
         el.select("rect")
           .transition().duration(250)
-          .attr("fill-opacity", isDownstream && !isSelected ? 0.05 : 0)
-          .attr("stroke", isDownstream && !isSelected ? "oklch(0.65 0.15 200)" : "transparent")
-          .attr("stroke-width", isDownstream && !isSelected ? 2 : 0);
+          .attr("stroke", isSelected ? "oklch(0.55 0.15 200)" : isDownstream && !isSelected ? "oklch(0.65 0.15 200)" : (nodeColors[d.type]?.stroke || "#ccc"))
+          .attr("stroke-width", isSelected ? 2.5 : isDownstream ? 2 : 1.5)
+          .attr("fill", isSelected ? "oklch(0.95 0.05 200)" : "white");
 
         el.select("foreignObject")
           .transition().duration(250)
-          .attr("opacity", shouldDim ? 0.2 : 1)
-          .attr("style", isSelected
-            ? "filter: drop-shadow(0 0 12px oklch(0.65 0.15 200)) drop-shadow(0 2px 8px oklch(0 0 0 / 0.15))"
-            : isDownstream
-            ? "filter: drop-shadow(0 0 8px oklch(0.65 0.15 200 / 0.5)) drop-shadow(0 2px 8px oklch(0 0 0 / 0.15))"
-            : "filter: drop-shadow(0 2px 8px oklch(0 0 0 / 0.15))");
+          .attr("opacity", shouldDim ? 0.2 : 1);
 
         el.selectAll("text")
           .transition().duration(250)
