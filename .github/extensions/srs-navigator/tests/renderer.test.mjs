@@ -32,14 +32,14 @@ describe("renderGraphHtml", () => {
     assert.ok(html.includes('"addresses"'));
   });
 
-  it("uses the provided title", () => {
+  it("uses the provided title in spec button", () => {
     const html = renderGraphHtml(sampleGraph, { title: "My Custom Title" });
-    assert.ok(html.includes("My Custom Title"));
+    assert.ok(html.includes("Specification: My Custom Title"));
   });
 
   it("defaults title to SRS Navigator", () => {
     const html = renderGraphHtml(sampleGraph);
-    assert.ok(html.includes("SRS Navigator"));
+    assert.ok(html.includes("Specification: SRS Navigator"));
   });
 
   it("includes analysis mode buttons", () => {
@@ -51,21 +51,22 @@ describe("renderGraphHtml", () => {
 
   it("marks the selected analysis mode as active", () => {
     const html = renderGraphHtml(sampleGraph, { analysisMode: "implementation" });
+    assert.ok(html.includes('data-mode="implementation">Implementation</button>'));
     // The implementation button should have "active" class
-    assert.ok(html.includes('data-mode="implementation" class="mode-btn active"') || 
-              html.includes('class="mode-btn active" data-mode="implementation"'));
+    assert.ok(html.includes('class="btn active" data-mode="implementation"'));
   });
 
-  it("includes search box", () => {
+  it("includes search input with placeholder", () => {
     const html = renderGraphHtml(sampleGraph);
     assert.ok(html.includes('id="search"'));
-    assert.ok(html.includes('placeholder="Search nodes..."'));
+    assert.ok(html.includes('placeholder="Search requirements..."'));
   });
 
   it("includes detail panel structure", () => {
     const html = renderGraphHtml(sampleGraph);
     assert.ok(html.includes('id="detail-panel"'));
     assert.ok(html.includes('id="panel-content"'));
+    assert.ok(html.includes("detail-header"));
   });
 
   it("escapes HTML in title", () => {
@@ -77,21 +78,21 @@ describe("renderGraphHtml", () => {
   it("handles empty graph data", () => {
     const html = renderGraphHtml({ nodes: [], links: [] });
     assert.ok(html.startsWith("<!DOCTYPE html>"));
-    assert.ok(html.includes("[]"));
   });
 
-  it("includes node color configuration", () => {
+  it("includes oklch node color configuration", () => {
     const html = renderGraphHtml(sampleGraph);
-    assert.ok(html.includes("#e67e22")); // problem color
-    assert.ok(html.includes("#2980b9")); // need color
-    assert.ok(html.includes("#8e44ad")); // fr color
+    assert.ok(html.includes("oklch(0.65 0.19 50)")); // problem color
+    assert.ok(html.includes("oklch(0.60 0.15 200)")); // need color
+    assert.ok(html.includes("oklch(0.55 0.18 265)")); // fr color
   });
 
-  it("includes CSS theming variables", () => {
+  it("includes CSS custom properties for theming", () => {
     const html = renderGraphHtml(sampleGraph);
-    assert.ok(html.includes("--background-color-default"));
-    assert.ok(html.includes("--text-color-default"));
-    assert.ok(html.includes("--font-sans"));
+    assert.ok(html.includes("--background"));
+    assert.ok(html.includes("--foreground"));
+    assert.ok(html.includes("--node-problem"));
+    assert.ok(html.includes("--border"));
   });
 
   it("includes window.srsNavigator API", () => {
@@ -100,5 +101,41 @@ describe("renderGraphHtml", () => {
     assert.ok(html.includes("getState"));
     assert.ok(html.includes("selectNode"));
     assert.ok(html.includes("setMode"));
+  });
+
+  it("includes zoom controls", () => {
+    const html = renderGraphHtml(sampleGraph);
+    assert.ok(html.includes('id="zoom-in"'));
+    assert.ok(html.includes('id="zoom-out"'));
+    assert.ok(html.includes('id="zoom-reset"'));
+  });
+
+  it("includes Problem-Based SRS title and badge", () => {
+    const html = renderGraphHtml(sampleGraph);
+    assert.ok(html.includes("Problem-Based SRS"));
+    assert.ok(html.includes('id="problem-badge"'));
+  });
+
+  it("includes Space Grotesk and JetBrains Mono fonts", () => {
+    const html = renderGraphHtml(sampleGraph);
+    assert.ok(html.includes("Space+Grotesk"));
+    assert.ok(html.includes("JetBrains+Mono"));
+  });
+
+  it("includes gradient SVG background", () => {
+    const html = renderGraphHtml(sampleGraph);
+    assert.ok(html.includes("radial-gradient"));
+    assert.ok(html.includes("linear-gradient"));
+  });
+
+  it("uses dashed stroke for links", () => {
+    const html = renderGraphHtml(sampleGraph);
+    assert.ok(html.includes("stroke-dasharray: 5,5"));
+  });
+
+  it("includes hull polygon for selection", () => {
+    const html = renderGraphHtml(sampleGraph);
+    assert.ok(html.includes("hull-group"));
+    assert.ok(html.includes("polygonHull"));
   });
 });
