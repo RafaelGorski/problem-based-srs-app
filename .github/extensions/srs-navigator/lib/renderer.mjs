@@ -65,6 +65,7 @@ export function renderGraphHtml(graphData, options = {}) {
       --transition-normal: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
     }
     * { margin: 0; padding: 0; box-sizing: border-box; }
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
     body {
       font-family: 'Space Grotesk', system-ui, -apple-system, sans-serif;
       background: var(--background);
@@ -494,6 +495,137 @@ export function renderGraphHtml(graphData, options = {}) {
       pointer-events: none;
     }
 
+    /* Health Bar */
+    .health-bar {
+      display: flex;
+      align-items: center;
+      gap: var(--space-md);
+      padding: var(--space-sm) var(--space-lg);
+      border-bottom: 1px solid var(--border);
+      background: oklch(0.97 0.003 240);
+      font-size: 12px;
+      font-weight: 500;
+      flex-shrink: 0;
+      overflow-x: auto;
+    }
+    .health-metric {
+      display: flex;
+      align-items: center;
+      gap: var(--space-xs);
+      white-space: nowrap;
+      padding: 3px 8px;
+      border-radius: 9999px;
+      cursor: pointer;
+      transition: background var(--transition-fast), box-shadow var(--transition-fast);
+    }
+    .health-metric:hover { background: oklch(0.93 0.01 240); }
+    .health-metric.active { background: oklch(0.90 0.03 200); box-shadow: 0 0 0 1px oklch(0.55 0.15 200 / 0.3); }
+    .health-metric .count {
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .health-metric .count.alert { color: oklch(0.55 0.19 30); }
+    .health-metric .count.ok { color: oklch(0.45 0.15 145); }
+    .health-metric .label { color: var(--muted-foreground); }
+    .health-metric-sep {
+      width: 1px;
+      height: 16px;
+      background: var(--border);
+      flex-shrink: 0;
+    }
+
+    /* Hot-spot pulse animation on nodes */
+    @keyframes hotspot-pulse {
+      0%, 100% { r: 26; opacity: 0.4; }
+      50% { r: 32; opacity: 0.15; }
+    }
+    .hotspot-ring {
+      animation: hotspot-pulse 2s ease-in-out infinite;
+      pointer-events: none;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .hotspot-ring { animation: none; opacity: 0.25; r: 28; }
+      *, *::before, *::after {
+        transition-duration: 0.01ms !important;
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+      }
+    }
+
+    /* Focus visible for keyboard navigation */
+    .health-metric:focus-visible,
+    .btn:focus-visible,
+    .btn-icon:focus-visible,
+    .spec-btn:focus-visible,
+    .conn-badge:focus-visible,
+    .modal-tab:focus-visible {
+      outline: 2px solid oklch(0.55 0.15 200);
+      outline-offset: 2px;
+    }
+
+    /* Text overflow protection */
+    .node-label, .node-id {
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .node-title {
+      overflow-wrap: break-word;
+      word-break: break-word;
+    }
+    .detail-body { overflow-wrap: break-word; }
+
+    /* Empty state */
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      gap: var(--space-md);
+      color: var(--muted-foreground);
+      font-size: 14px;
+      text-align: center;
+      padding: var(--space-xl);
+    }
+    .empty-state svg { opacity: 0.4; }
+
+    /* Error state */
+    .error-banner {
+      padding: var(--space-sm) var(--space-lg);
+      background: oklch(0.95 0.05 30);
+      border-bottom: 1px solid oklch(0.85 0.10 30);
+      color: oklch(0.40 0.15 30);
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      gap: var(--space-sm);
+    }
+    .error-banner button {
+      margin-left: auto;
+      background: none;
+      border: none;
+      color: inherit;
+      text-decoration: underline;
+      cursor: pointer;
+      font-size: 12px;
+    }
+
+    /* Hot-spot insight callout in detail panel */
+    .hotspot-insight {
+      margin: var(--space-md) 0;
+      padding: var(--space-sm) var(--space-md);
+      border-radius: 6px;
+      background: oklch(0.97 0.01 50);
+      border: 1px solid oklch(0.90 0.03 50);
+      font-size: 12px;
+      line-height: 1.5;
+      display: flex;
+      align-items: flex-start;
+      gap: var(--space-sm);
+    }
+    .hotspot-insight-icon { flex-shrink: 0; font-size: 14px; line-height: 1.3; }
+
     /* Demo indicator badge */
     .demo-badge {
       display: inline-flex;
@@ -717,6 +849,8 @@ export function renderGraphHtml(graphData, options = {}) {
     </div>
   </div>
 
+  <div class="health-bar" id="health-bar" role="toolbar" aria-label="Specification health metrics"></div>
+
   <div class="graph-container" id="graph-container">
     <svg id="graph-svg"></svg>
     <div class="zoom-controls">
@@ -763,10 +897,11 @@ export function renderGraphHtml(graphData, options = {}) {
   </div>
 
   <!-- Toast notification -->
-  <div class="toast" id="toast">
+  <div class="toast" id="toast" role="status" aria-live="polite">
     <svg width="16" height="16" viewBox="0 0 256 256" fill="currentColor"><path d="M173.66,98.34a8,8,0,0,1,0,11.32l-56,56a8,8,0,0,1-11.32,0l-24-24a8,8,0,0,1,11.32-11.32L112,148.69l50.34-50.35A8,8,0,0,1,173.66,98.34ZM232,128A104,104,0,1,1,128,24,104.11,104.11,0,0,1,232,128Zm-16,0a88,88,0,1,0-88,88A88.1,88.1,0,0,0,216,128Z"/></svg>
     <span id="toast-text"></span>
   </div>
+  <div id="sr-announcer" class="sr-only" aria-live="assertive" aria-atomic="true"></div>
 
   <script>
   (function() {
@@ -776,6 +911,17 @@ export function renderGraphHtml(graphData, options = {}) {
     let currentMode = "${analysisMode}";
     let searchTerm = "";
     let selectedNode = ${selectedNodeId ? `"${selectedNodeId}"` : 'null'};
+
+    // Guard: validate graph data
+    if (!graphData || !Array.isArray(graphData.nodes) || !Array.isArray(graphData.links)) {
+      document.getElementById('graph-container').innerHTML = '<div class="empty-state"><svg width="48" height="48" viewBox="0 0 256 256" fill="currentColor"><path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm0,192a88,88,0,1,1,88-88A88.1,88.1,0,0,1,128,216Zm-8-80V80a8,8,0,0,1,16,0v56a8,8,0,0,1-16,0Zm20,36a12,12,0,1,1-12-12A12,12,0,0,1,140,172Z"/></svg><p>No valid specification data.<br/>Use the agent to load a specification.</p></div>';
+      return;
+    }
+
+    if (graphData.nodes.length === 0) {
+      document.getElementById('graph-container').innerHTML = '<div class="empty-state"><svg width="48" height="48" viewBox="0 0 256 256" fill="currentColor"><path d="M208,32H48A16,16,0,0,0,32,48V208a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V48A16,16,0,0,0,208,32Zm0,176H48V48H208V208Z"/></svg><p>Specification is empty.<br/>Add problems, needs, and requirements to visualize.</p></div>';
+      return;
+    }
 
     // Problem badge
     const problemCount = graphData.nodes.filter(n => n.type === "problem").length;
@@ -842,11 +988,141 @@ export function renderGraphHtml(graphData, options = {}) {
     const links = graphData.links.map(d => ({...d}));
     const nodes = graphData.nodes.map(d => ({...d}));
 
+    // === HOT-SPOT DETECTION ===
+    // Compute connectivity and identify nodes that need attention
+    const hotspots = (function() {
+      const inDegree = {};
+      const outDegree = {};
+      nodes.forEach(n => { inDegree[n.id] = 0; outDegree[n.id] = 0; });
+      links.forEach(l => {
+        const src = typeof l.source === 'object' ? l.source.id : l.source;
+        const tgt = typeof l.target === 'object' ? l.target.id : l.target;
+        outDegree[src] = (outDegree[src] || 0) + 1;
+        inDegree[tgt] = (inDegree[tgt] || 0) + 1;
+      });
+
+      const orphanedProblems = []; // CP with no downstream
+      const unmetNeeds = [];       // CN with no downstream FR/NFR
+      const hubs = [];             // High connectivity (degree >= 4)
+      const leafNodes = [];        // Nodes with no connections at all
+
+      nodes.forEach(n => {
+        const totalDegree = (inDegree[n.id] || 0) + (outDegree[n.id] || 0);
+        n._degree = totalDegree;
+        n._hotspot = null;
+        n._hotspotSeverity = 0; // 0=none, 1=info, 2=warning, 3=critical
+
+        if (n.type === 'problem' && (outDegree[n.id] || 0) === 0) {
+          orphanedProblems.push(n.id);
+          n._hotspot = 'orphaned';
+          n._hotspotSeverity = 3;
+        } else if (n.type === 'need' && (outDegree[n.id] || 0) === 0) {
+          unmetNeeds.push(n.id);
+          n._hotspot = 'unmet';
+          n._hotspotSeverity = 2;
+        } else if (totalDegree >= 4) {
+          hubs.push(n.id);
+          n._hotspot = 'hub';
+          n._hotspotSeverity = 1;
+        } else if (totalDegree === 0) {
+          leafNodes.push(n.id);
+          n._hotspot = 'isolated';
+          n._hotspotSeverity = 3;
+        }
+      });
+
+      // Node size scale: base 22, only scale up for "Need Cluster" hubs
+      const maxDegree = Math.max(...nodes.map(n => n._degree), 1);
+      nodes.forEach(n => {
+        // Only hubs (Need Clusters) get larger; all other nodes stay at base size
+        if (n._hotspot === 'hub') {
+          n._radius = 22 + (n._degree / maxDegree) * 10;
+        } else {
+          n._radius = 22;
+        }
+      });
+
+      return { orphanedProblems, unmetNeeds, hubs, leafNodes, maxDegree };
+    })();
+
+    // Render health bar
+    (function renderHealthBar() {
+      const bar = document.getElementById('health-bar');
+      const total = nodes.length;
+      const gaps = hotspots.orphanedProblems.length + hotspots.unmetNeeds.length + hotspots.leafNodes.length;
+      const coverage = total > 0 ? Math.round(((total - gaps) / total) * 100) : 100;
+
+      if (total === 0) {
+        bar.innerHTML = '<div class="health-metric"><span class="label">No nodes to analyze</span></div>';
+        return;
+      }
+
+      let html = '';
+      html += '<div class="health-metric" role="button" tabindex="0" aria-pressed="false" data-filter="all" aria-label="' + total + ' total nodes"><span class="count">' + total + '</span><span class="label">nodes</span></div>';
+      html += '<div class="health-metric-sep" aria-hidden="true"></div>';
+
+      if (hotspots.orphanedProblems.length > 0) {
+        html += '<div class="health-metric" role="button" tabindex="0" aria-pressed="false" data-filter="orphaned" title="Problems with no linked needs" aria-label="' + hotspots.orphanedProblems.length + ' orphaned problems"><span class="count alert">' + hotspots.orphanedProblems.length + '</span><span class="label">orphaned problems</span></div>';
+      }
+      if (hotspots.unmetNeeds.length > 0) {
+        html += '<div class="health-metric" role="button" tabindex="0" aria-pressed="false" data-filter="unmet" title="Needs with no linked requirements" aria-label="' + hotspots.unmetNeeds.length + ' unmet needs"><span class="count alert">' + hotspots.unmetNeeds.length + '</span><span class="label">unmet needs</span></div>';
+      }
+      if (hotspots.leafNodes.length > 0) {
+        html += '<div class="health-metric" role="button" tabindex="0" aria-pressed="false" data-filter="isolated" title="Completely disconnected nodes" aria-label="' + hotspots.leafNodes.length + ' isolated nodes"><span class="count alert">' + hotspots.leafNodes.length + '</span><span class="label">isolated</span></div>';
+      }
+      if (hotspots.hubs.length > 0) {
+        html += '<div class="health-metric" role="button" tabindex="0" aria-pressed="false" data-filter="hub" title="High-connectivity need nodes (4+ connections)" aria-label="' + hotspots.hubs.length + ' need clusters"><span class="count ok">' + hotspots.hubs.length + '</span><span class="label">need clusters</span></div>';
+      }
+
+      html += '<div class="health-metric-sep" aria-hidden="true"></div>';
+      html += '<div class="health-metric" role="button" tabindex="0" aria-pressed="false" data-filter="all" aria-label="' + coverage + '% traceability coverage"><span class="count ' + (coverage === 100 ? 'ok' : coverage >= 80 ? '' : 'alert') + '">' + coverage + '%</span><span class="label">traceability</span></div>';
+
+      bar.innerHTML = html;
+
+      // Wire health metric click → filter hot spots
+      function activateFilter(el) {
+        const filter = el.dataset.filter;
+        const wasActive = el.classList.contains('active');
+        bar.querySelectorAll('.health-metric').forEach(m => {
+          m.classList.remove('active');
+          m.setAttribute('aria-pressed', 'false');
+        });
+        if (!wasActive && filter !== 'all') {
+          el.classList.add('active');
+          el.setAttribute('aria-pressed', 'true');
+          hotspotFilter = filter;
+          announce('Filtering: ' + el.getAttribute('aria-label'));
+        } else {
+          hotspotFilter = null;
+          announce('Filter cleared');
+        }
+        updateVisibility();
+      }
+
+      bar.querySelectorAll('.health-metric[data-filter]').forEach(el => {
+        el.addEventListener('click', () => activateFilter(el));
+        el.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            activateFilter(el);
+          }
+        });
+      });
+    })();
+
+    // Screen reader announcements
+    function announce(message) {
+      const el = document.getElementById('sr-announcer');
+      if (el) { el.textContent = ''; requestAnimationFrame(() => { el.textContent = message; }); }
+    }
+
+    let hotspotFilter = null;
+
     const simulation = d3.forceSimulation(nodes)
       .force("link", d3.forceLink(links).id(d => d.id).distance(150))
       .force("charge", d3.forceManyBody().strength(-400))
       .force("center", d3.forceCenter(width / 2, height / 2))
-      .force("collision", d3.forceCollide().radius(50));
+      .force("collision", d3.forceCollide().radius(d => (d._radius || 22) + 35));
 
     // Hull group (for selection highlighting)
     const hullGroup = g.append("g").attr("class", "hull-group");
@@ -869,15 +1145,25 @@ export function renderGraphHtml(graphData, options = {}) {
         .on("drag", dragged)
         .on("end", dragended));
 
-    // Node background plate (rounded rect behind icon)
+    // Node background plate (rounded rect behind icon — size varies by degree)
     nodeElements.append("rect")
-      .attr("x", -22).attr("y", -22)
-      .attr("width", 44).attr("height", 44)
+      .attr("x", d => -(d._radius || 22)).attr("y", d => -(d._radius || 22))
+      .attr("width", d => (d._radius || 22) * 2).attr("height", d => (d._radius || 22) * 2)
       .attr("rx", 10).attr("ry", 10)
       .attr("fill", "white")
       .attr("stroke", d => nodeColors[d.type]?.stroke || "#ccc")
       .attr("stroke-width", 1.5)
       .attr("filter", "url(#node-shadow)");
+
+    // Hot-spot pulse ring (only for nodes with attention needed)
+    nodeElements.filter(d => d._hotspotSeverity >= 2)
+      .insert("circle", ":first-child")
+      .attr("class", "hotspot-ring")
+      .attr("cx", 0).attr("cy", 0)
+      .attr("r", d => (d._radius || 22) + 4)
+      .attr("fill", "none")
+      .attr("stroke", d => d._hotspotSeverity === 3 ? "oklch(0.60 0.19 50)" : "oklch(0.55 0.15 200)")
+      .attr("stroke-width", 2);
 
     // Icon via foreignObject (like original)
     nodeElements.append("foreignObject")
@@ -886,18 +1172,21 @@ export function renderGraphHtml(graphData, options = {}) {
       .attr("pointer-events", "none")
       .html(d => '<div style="width:40px;height:40px;display:flex;align-items:center;justify-content:center;color:' + (nodeColors[d.type]?.fill || '#666') + '">' + (nodeIcons[d.type] || '') + '</div>');
 
-    // Node ID text
+    // Node ID text (positioned below plate, dynamic based on radius)
     nodeElements.append("text")
       .attr("class", "node-id")
-      .attr("dy", 35)
-      .text(d => d.id);
+      .attr("dy", d => (d._radius || 22) + 13)
+      .text(d => (d.id || '').substring(0, 20));
 
-    // Node label text (with word wrap)
+    // Node label text (with word wrap, max 3 lines to prevent overflow)
     nodeElements.each(function(d) {
       const group = d3.select(this);
-      const words = d.label.split(/\\s+/);
+      const label = (d.label || '').substring(0, 80); // Truncate very long labels
+      const words = label.split(/\s+/).filter(Boolean);
+      if (words.length === 0) return;
       const maxWidth = 120;
       const lineHeight = 1.1;
+      const maxLines = 3;
       const lines = [];
       let line = [];
 
@@ -908,13 +1197,18 @@ export function renderGraphHtml(graphData, options = {}) {
           line.pop();
           lines.push(line.join(" "));
           line = [word];
+          if (lines.length >= maxLines) break;
         }
       }
-      if (line.length > 0) lines.push(line.join(" "));
+      if (line.length > 0 && lines.length < maxLines) lines.push(line.join(" "));
+      // Add ellipsis if truncated
+      if (lines.length >= maxLines && words.length > lines.join(" ").split(/\s+/).length) {
+        lines[lines.length - 1] = lines[lines.length - 1].substring(0, 18) + '…';
+      }
 
       const text = group.append("text")
         .attr("class", "node-label")
-        .attr("y", 48);
+        .attr("y", d._radius + 26);
 
       lines.forEach((lineText, i) => {
         text.append("tspan")
@@ -963,6 +1257,21 @@ export function renderGraphHtml(graphData, options = {}) {
       let html = '<span class="node-badge" style="background:' + colors.fill + '">' + smallIcon + ' ' + colors.fullLabel + '</span>';
       html += '<div class="node-id-text">' + node.id + '</div>';
       html += '<h3 class="node-title">' + escapeHtml(node.label) + '</h3>';
+
+      // Hot-spot insight
+      if (node._hotspot) {
+        const insights = {
+          orphaned: { icon: '⚠', color: 'oklch(0.55 0.19 50)', text: 'Orphaned — no linked needs. This problem lacks traceability to requirements.' },
+          unmet: { icon: '⚠', color: 'oklch(0.55 0.15 200)', text: 'Unmet — no linked requirements. This need has no FR/NFR addressing it.' },
+          hub: { icon: '◉', color: 'oklch(0.45 0.15 145)', text: 'Need Cluster — high connectivity (' + node._degree + ' connections). Key convergence point in the dependency graph.' },
+          isolated: { icon: '⊘', color: 'oklch(0.55 0.19 50)', text: 'Isolated — no connections at all. This node is disconnected from the spec.' }
+        };
+        const insight = insights[node._hotspot];
+        if (insight) {
+          html += '<div class="hotspot-insight" style="color:' + insight.color + '"><span class="hotspot-insight-icon">' + insight.icon + '</span><span>' + insight.text + '</span></div>';
+        }
+      }
+
       html += '<div class="separator"></div>';
       html += '<div class="section-title">Description</div>';
       html += '<p class="description">' + escapeHtml(node.data?.description || 'No description available.') + '</p>';
@@ -1080,7 +1389,8 @@ export function renderGraphHtml(graphData, options = {}) {
         const matchesSearch = !searchTerm || d.id.toLowerCase().includes(searchTerm) || d.label.toLowerCase().includes(searchTerm);
         const isSelected = d.id === selectedNode;
         const isDownstream = downstreamIds.has(d.id);
-        const shouldDim = (isFiltered && !isDownstream) || (searchTerm && !matchesSearch);
+        const matchesHotspot = !hotspotFilter || d._hotspot === hotspotFilter;
+        const shouldDim = (isFiltered && !isDownstream) || (searchTerm && !matchesSearch) || (hotspotFilter && !matchesHotspot);
 
         if (!shouldDim && searchTerm && matchesSearch && !firstMatch) firstMatch = d;
 
@@ -1092,25 +1402,33 @@ export function renderGraphHtml(graphData, options = {}) {
 
         el.select("foreignObject")
           .transition().duration(250)
-          .attr("opacity", shouldDim ? 0.2 : 1);
+          .attr("opacity", shouldDim ? 0.15 : 1);
 
         el.selectAll("text")
           .transition().duration(250)
-          .attr("opacity", shouldDim ? 0.2 : 1);
+          .attr("opacity", shouldDim ? 0.15 : 1);
+
+        // Hot-spot ring visibility
+        el.select(".hotspot-ring")
+          .transition().duration(250)
+          .attr("opacity", shouldDim ? 0 : 1);
       });
 
       linkElements.each(function(d) {
         const src = typeof d.source === "object" ? d.source.id : d.source;
         const tgt = typeof d.target === "object" ? d.target.id : d.target;
-        const srcVisible = visibleTypes.has(nodes.find(n => n.id === src)?.type);
-        const tgtVisible = visibleTypes.has(nodes.find(n => n.id === tgt)?.type);
+        const srcNode = nodes.find(n => n.id === src);
+        const tgtNode = nodes.find(n => n.id === tgt);
+        const srcVisible = visibleTypes.has(srcNode?.type);
+        const tgtVisible = visibleTypes.has(tgtNode?.type);
         const linkKey = src + "->" + tgt;
         const isDownstream = downstreamLinkPairs.has(linkKey);
         const bothVisible = srcVisible && tgtVisible;
+        const matchesHotspot = !hotspotFilter || (srcNode?._hotspot === hotspotFilter || tgtNode?._hotspot === hotspotFilter);
 
         d3.select(this)
           .transition().duration(250)
-          .attr("stroke-opacity", isDownstream ? 0.9 : (bothVisible ? 0.4 : 0.1))
+          .attr("stroke-opacity", isDownstream ? 0.9 : (bothVisible && matchesHotspot ? 0.4 : (hotspotFilter ? 0.05 : 0.35)))
           .attr("stroke", isDownstream ? "oklch(0.65 0.15 200)" : "oklch(0.65 0.05 240)")
           .attr("stroke-width", isDownstream ? 3 : 2)
           .style("display", bothVisible || isDownstream ? null : "none");
@@ -1123,6 +1441,21 @@ export function renderGraphHtml(graphData, options = {}) {
         const y = firstMatch.y || height / 2;
         const transform = d3.zoomIdentity.translate(width/2, height/2).scale(scale).translate(-x, -y);
         svg.transition().duration(750).call(zoom.transform, transform);
+      }
+
+      // Auto-zoom to hotspot group
+      if (hotspotFilter && !searchTerm && !selectedNode) {
+        const hotNodes = nodes.filter(n => n._hotspot === hotspotFilter && n.x != null);
+        if (hotNodes.length > 0) {
+          const xs = hotNodes.map(n => n.x);
+          const ys = hotNodes.map(n => n.y);
+          const cx = (Math.min(...xs) + Math.max(...xs)) / 2;
+          const cy = (Math.min(...ys) + Math.max(...ys)) / 2;
+          const span = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys), 200);
+          const scale = Math.min(width, height) / (span + 200);
+          const transform = d3.zoomIdentity.translate(width/2, height/2).scale(Math.min(scale, 2)).translate(-cx, -cy);
+          svg.transition().duration(750).call(zoom.transform, transform);
+        }
       }
     }
 
@@ -1236,8 +1569,14 @@ export function renderGraphHtml(graphData, options = {}) {
     function openModal() {
       specModal.classList.add("active");
       renderModalTab("examples");
+      // Focus the close button for keyboard users
+      setTimeout(() => document.getElementById("modal-close").focus(), 100);
     }
-    function closeModal() { specModal.classList.remove("active"); }
+    function closeModal() {
+      specModal.classList.remove("active");
+      // Return focus to the trigger button
+      document.getElementById("spec-btn").focus();
+    }
     function renderModalTab(tab) {
       document.querySelectorAll(".modal-tab").forEach(t => t.classList.toggle("active", t.dataset.tab === tab));
       modalBody.innerHTML = modalTabs[tab]();
@@ -1253,6 +1592,13 @@ export function renderGraphHtml(graphData, options = {}) {
     document.getElementById("spec-btn").addEventListener("click", openModal);
     document.getElementById("modal-close").addEventListener("click", closeModal);
     specModal.addEventListener("click", (e) => { if (e.target === specModal) closeModal(); });
+    // Escape key closes modal
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && specModal.classList.contains("active")) {
+        e.preventDefault();
+        closeModal();
+      }
+    });
     document.querySelectorAll(".modal-tab").forEach(tab => {
       tab.addEventListener("click", () => renderModalTab(tab.dataset.tab));
     });

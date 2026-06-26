@@ -18,6 +18,8 @@ Engineers can explore traceability (problem → need → requirement), filter by
 ## Architecture
 
 ```
+.spec/                                 # Auto-discovered spec files
+│   └── crm-system.json               # Default demo spec (JSON)
 .github/extensions/srs-navigator/
 ├── extension.mjs              # Entry point — canvas + 5 agent actions
 ├── copilot-extension.json     # Manifest for gist sharing
@@ -107,6 +109,20 @@ extensions_manage({ operation: "inspect", name: "srs-navigator" })  # Check logs
 ```
 
 ## Usage
+
+### Auto-discovery via `.spec/` folder
+
+Place your SRS specification JSON files in a `.spec/` folder at the repository root:
+
+```
+your-project/
+├── .spec/
+│   └── my-system.json    ← Auto-loaded on canvas open
+├── src/
+└── ...
+```
+
+When the canvas opens without explicit input, it scans `.spec/*.json` and loads the first valid spec found. If no `.spec/` folder exists (or contains no valid specs), the built-in **demo** data loads instead with a "DEMO" badge.
 
 ### Open the canvas
 
