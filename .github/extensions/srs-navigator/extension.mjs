@@ -453,7 +453,7 @@ const session = await joinSession({
                         }
 
                         return {
-                            instruction: "Use the `problem_based_srs` tool to run the full methodology. After generating the .spec/ markdown artifacts, also create a JSON file at .spec/<project-name>.json. Then use the `compile_spec` canvas action (or `load_specification` with the filePath) to display the result in the navigator.",
+                            instruction: "Use the `problem_based_srs` tool to run the full methodology. After generating the .spec/ markdown artifacts AND the JSON file, you MUST use the `load_specification` canvas action with the ABSOLUTE filePath to the JSON file to display the graph in the navigator. The graph will NOT auto-refresh without this explicit action.",
                             skillContent: result,
                             message: "Learn action triggered. Run the problem_based_srs methodology and load the result into the canvas."
                         };
@@ -620,8 +620,10 @@ const session = await joinSession({
                                                 '}',
                                                 "```",
                                                 "",
-                                                "After creating the JSON file, use the `compile_spec` canvas action to load the spec into the SRS Navigator graph.",
-                                                "If compile_spec fails, use the `load_specification` canvas action with the filePath to the JSON file.",
+                                                "**CRITICAL - Display the graph:** After creating the JSON file, you MUST use the `load_specification` canvas action",
+                                                "with the ABSOLUTE file path to the JSON file (e.g., filePath: \"/full/path/to/.spec/project-name.json\").",
+                                                "This will load the specification into the SRS Navigator graph and display it to the user.",
+                                                "Do NOT skip this step — the graph will not auto-refresh without it.",
                                             ].join("\n");
                                             await session.send({ prompt });
                                             res.setHeader("Content-Type", "application/json");
