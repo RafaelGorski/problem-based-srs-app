@@ -20,6 +20,12 @@ import { compileAndSave, compileSpecFromFolder } from "./lib/spec-compiler.mjs";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const skillsDir = resolve(__dirname, "skills");
 
+// Derive workspace root from extension location:
+// Project extension: <workspace>/.github/extensions/srs-navigator/ → 3 levels up
+// User extension: ~/.copilot/extensions/srs-navigator/ → fall back to process.cwd()
+const isProjectExtension = __dirname.includes(".github");
+const derivedWorkspacePath = isProjectExtension ? resolve(__dirname, "..", "..", "..") : null;
+
 // Skill definitions for tool registration
 const SKILLS = [
     {
@@ -155,8 +161,12 @@ async function loadFromSpecFolder(workspacePath) {
                 const filePath = join(specDir, file);
                 const content = await readFile(filePath, "utf-8");
                 const json = JSON.parse(content);
-                const result = loadAndBuildGraph(json);
-                return { ...result, filePath };
+                const validation = validateSpecificationJSON(json);
+                if (!validation.success) continue;
+                const specData = convertJSONToSpecificationData(validation.data);
+                const graphData = buildGraphData(specData);
+                if (!graphData.nodes.length) continue;
+                return { graphData, specData, specName: validation.data.name, filePath };
             } catch {
                 // Skip invalid files, try next
             }
@@ -165,10 +175,20 @@ async function loadFromSpecFolder(workspacePath) {
         // No valid JSON found — try compiling from markdown artifacts
         const compiledPath = await compileAndSave(specDir);
         if (compiledPath) {
-            const content = await readFile(compiledPath, "utf-8");
-            const json = JSON.parse(content);
-            const result = loadAndBuildGraph(json);
-            return { ...result, filePath: compiledPath };
+            try {
+                const content = await readFile(compiledPath, "utf-8");
+                const json = JSON.parse(content);
+                const validation = validateSpecificationJSON(json);
+                if (validation.success) {
+                    const specData = convertJSONToSpecificationData(validation.data);
+                    const graphData = buildGraphData(specData);
+                    if (graphData.nodes.length) {
+                        return { graphData, specData, specName: validation.data.name, filePath: compiledPath };
+                    }
+                }
+            } catch {
+                // Compilation produced invalid output
+            }
         }
     } catch {
         // .spec folder doesn't exist or can't be read
@@ -433,7 +453,7 @@ const session = await joinSession({
                         }
 
                         return {
-                            instruction: "Use the `problem_based_srs` tool to run the full methodology. After generating the specification JSON, use the `load_specification` canvas action to display it in the navigator.",
+                            instruction: "Use the `problem_based_srs` tool to run the full methodology. After generating the .spec/ markdown artifacts, also create a JSON file at .spec/<project-name>.json. Then use the `compile_spec` canvas action (or `load_specification` with the filePath) to display the result in the navigator.",
                             skillContent: result,
                             message: "Learn action triggered. Run the problem_based_srs methodology and load the result into the canvas."
                         };
@@ -455,7 +475,7 @@ const session = await joinSession({
                         const entry = instances.get(ctx.instanceId);
                         if (!entry) throw new CanvasError("not_open", "Canvas instance not found");
 
-                        const workspacePath = session.workspacePath || "";
+                        const workspacePath = derivedWorkspacePath || session.workspacePath || process.env.COPILOT_WORKSPACE_PATH || process.cwd();
                         const specDir = ctx.input?.specDir || join(workspacePath, ".spec");
 
                         const filePath = await compileAndSave(specDir);
@@ -507,8 +527,17 @@ const session = await joinSession({
                     specName = result.specName;
                 } else {
                     // Try loading from .spec folder in the workspace first
-                    const workspacePath = session.workspacePath || ctx.host?.workspacePath;
-                    const fromFolder = await loadFromSpecFolder(workspacePath);
+                    // Priority: derivedWorkspacePath (project ext) > ctx.host > env vars > session cwd (unreliable)
+                    const workspacePath = derivedWorkspacePath || ctx.host?.workspacePath || process.env.COPILOT_WORKSPACE_PATH || "";
+                    let fromFolder = null;
+                    if (workspacePath) {
+                        try {
+                            fromFolder = await loadFromSpecFolder(workspacePath);
+                        } catch (e) {
+                            // Log error but don't crash — show landing page instead
+                            try { session.log(`[srs-nav] loadFromSpecFolder error: ${e.message}`); } catch {}
+                        }
+                    }
                     if (fromFolder) {
                         graphData = fromFolder.graphData;
                         specName = fromFolder.specName;
@@ -520,7 +549,7 @@ const session = await joinSession({
                             isDemo: true,
                             showLanding: true
                         });
-                        const workspacePathResolved = session.workspacePath || ctx.host?.workspacePath;
+                        const workspacePathResolved = derivedWorkspacePath || ctx.host?.workspacePath || process.env.COPILOT_WORKSPACE_PATH || "";
 
                         const server = createServer((req, res) => {
                             const inst = instances.get(ctx.instanceId);
@@ -529,7 +558,7 @@ const session = await joinSession({
                                 // Polling endpoint: check if a spec has appeared in .spec/
                                 (async () => {
                                     try {
-                                        const result = await loadFromSpecFolder(workspacePathResolved);
+                                        const result = workspacePathResolved ? await loadFromSpecFolder(workspacePathResolved) : null;
                                         if (result) {
                                             // Spec found — switch to graph view
                                             const html = renderGraphHtml(result.graphData, { title: result.specName, isDemo: false });
@@ -591,8 +620,8 @@ const session = await joinSession({
                                                 '}',
                                                 "```",
                                                 "",
-                                                "The SRS Navigator canvas will auto-detect the JSON file and display the graph.",
-                                                "Alternatively, use the `load_specification` canvas action to load it immediately.",
+                                                "After creating the JSON file, use the `compile_spec` canvas action to load the spec into the SRS Navigator graph.",
+                                                "If compile_spec fails, use the `load_specification` canvas action with the filePath to the JSON file.",
                                             ].join("\n");
                                             await session.send({ prompt });
                                             res.setHeader("Content-Type", "application/json");
