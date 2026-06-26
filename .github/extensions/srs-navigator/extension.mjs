@@ -3,8 +3,8 @@
 // requirements specifications structured using the Problem-Based SRS methodology.
 
 import { createServer } from "node:http";
-import { readFile } from "node:fs/promises";
-import { resolve, dirname } from "node:path";
+import { readFile, readdir } from "node:fs/promises";
+import { resolve, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { joinSession, createCanvas, CanvasError } from "@github/copilot-sdk/extension";
 
@@ -50,6 +50,33 @@ function loadAndBuildGraph(specJSON) {
         throw new CanvasError("empty_spec", "No nodes could be created from the specification");
     }
     return { graphData, specData, specName: validation.data.name };
+}
+
+/**
+ * Scan for .spec folder in the workspace and load the first valid JSON spec found.
+ * Returns { graphData, specName, filePath } or null if no .spec folder or valid spec.
+ */
+async function loadFromSpecFolder(workspacePath) {
+    if (!workspacePath) return null;
+    const specDir = join(workspacePath, ".spec");
+    try {
+        const files = await readdir(specDir);
+        const jsonFiles = files.filter(f => f.endsWith(".json")).sort();
+        for (const file of jsonFiles) {
+            try {
+                const filePath = join(specDir, file);
+                const content = await readFile(filePath, "utf-8");
+                const json = JSON.parse(content);
+                const result = loadAndBuildGraph(json);
+                return { ...result, filePath };
+            } catch {
+                // Skip invalid files, try next
+            }
+        }
+    } catch {
+        // .spec folder doesn't exist or can't be read
+    }
+    return null;
 }
 
 const session = await joinSession({
@@ -270,11 +297,19 @@ const session = await joinSession({
                     graphData = result.graphData;
                     specName = result.specName;
                 } else {
-                    // Load demo specification
-                    const result = loadAndBuildGraph(DEMO_SPEC);
-                    graphData = result.graphData;
-                    specName = result.specName;
-                    isDemo = true;
+                    // Try loading from .spec folder in the workspace first
+                    const workspacePath = session.workspacePath || ctx.host?.workspacePath;
+                    const fromFolder = await loadFromSpecFolder(workspacePath);
+                    if (fromFolder) {
+                        graphData = fromFolder.graphData;
+                        specName = fromFolder.specName;
+                    } else {
+                        // Fall back to embedded demo specification
+                        const result = loadAndBuildGraph(DEMO_SPEC);
+                        graphData = result.graphData;
+                        specName = result.specName;
+                        isDemo = true;
+                    }
                 }
 
                 const html = renderGraphHtml(graphData, {
