@@ -218,6 +218,58 @@ async function loadFromSpecFolder(workspacePath) {
     return null;
 }
 
+/**
+ * Reload a canvas instance from the specification source it currently displays.
+ *
+ * The refresh button, the auto-refresh poll, and the idle hook all use this so
+ * the canvas reloads from the SAME file the agent loaded (via load_specification
+ * or open). It prefers the instance's tracked `sourceFilePath` and only falls
+ * back to scanning the .spec/ folder when no source file is known. Returns true
+ * when the loaded graph content actually changed.
+ */
+async function reloadInstanceFromSource(inst, workspacePath) {
+    if (!inst) return false;
+
+    let result = null;
+    let hadSourceFile = false;
+    if (inst.sourceFilePath) {
+        hadSourceFile = true;
+        try {
+            const content = await readFile(inst.sourceFilePath, "utf-8");
+            const json = JSON.parse(content);
+            const built = loadAndBuildGraph(json);
+            result = { graphData: built.graphData, specName: built.specName, filePath: inst.sourceFilePath };
+        } catch {
+            // Source file missing/invalid — fall back to a folder scan below
+            result = null;
+        }
+    }
+
+    if (!result) {
+        // Only auto-discover from the .spec/ folder when we're still on the
+        // landing view or our known source file disappeared. Never fall back for
+        // an inline-loaded or demo spec (no source file) — that would clobber it.
+        const allowFolderScan = inst.isLanding || hadSourceFile;
+        if (allowFolderScan && workspacePath) {
+            result = await loadFromSpecFolder(workspacePath);
+        }
+    }
+    if (!result) return false;
+
+    if (graphSignature(result.graphData) === graphSignature(inst.graphData)) {
+        // Keep the source pointer fresh even when content is unchanged
+        if (result.filePath) inst.sourceFilePath = result.filePath;
+        return false;
+    }
+
+    inst.graphData = result.graphData;
+    inst.specName = result.specName;
+    inst.html = renderGraphHtml(result.graphData, { title: result.specName, isDemo: false });
+    inst.isLanding = false;
+    if (result.filePath) inst.sourceFilePath = result.filePath;
+    return true;
+}
+
 const session = await joinSession({
     tools: buildSkillTools(),
     canvases: [
@@ -260,6 +312,7 @@ const session = await joinSession({
                         if (!entry) throw new CanvasError("not_open", "Canvas instance not found");
 
                         let graphData, specName;
+                        let sourceFilePath = null;
 
                         if (ctx.input?.filePath) {
                             const content = await readFile(ctx.input.filePath, "utf-8");
@@ -267,6 +320,7 @@ const session = await joinSession({
                             const result = loadAndBuildGraph(json);
                             graphData = result.graphData;
                             specName = result.specName;
+                            sourceFilePath = ctx.input.filePath;
                         } else if (ctx.input?.specification) {
                             const result = loadAndBuildGraph(ctx.input.specification);
                             graphData = result.graphData;
@@ -288,6 +342,9 @@ const session = await joinSession({
                         entry.specName = specName;
                         entry.html = html;
                         entry.isLanding = false;
+                        // Track the loaded file so the refresh button / poll reload the
+                        // same source the agent loaded. In-memory specs clear the pointer.
+                        entry.sourceFilePath = sourceFilePath;
 
                         return {
                             specName,
@@ -516,6 +573,7 @@ const session = await joinSession({
                         entry.specName = result.specName;
                         entry.html = html;
                         entry.isLanding = false;
+                        entry.sourceFilePath = filePath;
 
                         return {
                             specName: result.specName,
@@ -536,6 +594,7 @@ const session = await joinSession({
 
                 let graphData, specName;
                 let isDemo = false;
+                let sourceFilePath = null;
                 const input = ctx.input || {};
 
                 if (input.filePath) {
@@ -544,6 +603,7 @@ const session = await joinSession({
                     const result = loadAndBuildGraph(json);
                     graphData = result.graphData;
                     specName = result.specName;
+                    sourceFilePath = input.filePath;
                 } else if (input.specification) {
                     const result = loadAndBuildGraph(input.specification);
                     graphData = result.graphData;
@@ -564,6 +624,7 @@ const session = await joinSession({
                     if (fromFolder) {
                         graphData = fromFolder.graphData;
                         specName = fromFolder.specName;
+                        sourceFilePath = fromFolder.filePath || null;
                     } else {
                         // No spec found — show landing overlay on top of demo graph
                         const demoResult = loadAndBuildGraph(DEMO_SPEC);
@@ -595,6 +656,7 @@ const session = await joinSession({
                                             inst.specName = result.specName;
                                             inst.html = html;
                                             inst.isLanding = false;
+                                            inst.sourceFilePath = result.filePath || null;
                                             res.setHeader("Content-Type", "application/json");
                                             res.end(JSON.stringify({ found: true, specName: result.specName }));
                                         } else {
@@ -753,22 +815,14 @@ const session = await joinSession({
                                             res.end(JSON.stringify({ refreshed: false }));
                                             return;
                                         }
-                                        const result = workspacePathResolved ? await loadFromSpecFolder(workspacePathResolved) : null;
-                                        if (result) {
-                                            // Re-read the spec from disk and detect content changes (not just counts)
-                                            const newSig = graphSignature(result.graphData);
-                                            if (newSig !== graphSignature(inst.graphData)) {
-                                                inst.graphData = result.graphData;
-                                                inst.specName = result.specName;
-                                                inst.html = renderGraphHtml(result.graphData, { title: result.specName, isDemo: false });
-                                                inst.isLanding = false;
-                                            }
-                                        }
+                                        // Reload from the same source the agent loaded (sourceFilePath),
+                                        // falling back to a .spec/ folder scan. This keeps the refresh
+                                        // button / poll in lock-step with load_specification.
+                                        await reloadInstanceFromSource(inst, workspacePathResolved);
                                         // Reload whenever the loaded graph differs from what the
-                                        // browser currently displays — covers both on-disk edits and
-                                        // out-of-band updates from the load_specification action.
-                                        const currentSig = graphSignature(inst.graphData);
-                                        const refreshed = currentSig !== (inst.servedSignature || "");
+                                        // browser currently displays — covers on-disk edits and the
+                                        // out-of-band load_specification action.
+                                        const refreshed = graphSignature(inst.graphData) !== (inst.servedSignature || "");
                                         res.setHeader("Content-Type", "application/json");
                                         res.end(JSON.stringify({
                                             refreshed,
@@ -892,21 +946,13 @@ const session = await joinSession({
                                     return;
                                 }
                                 const wp = derivedWorkspacePath || process.env.COPILOT_WORKSPACE_PATH || "";
-                                const result = wp ? await loadFromSpecFolder(wp) : null;
-                                if (result) {
-                                    // Re-read the spec from disk and detect content changes (not just counts)
-                                    const newSig = graphSignature(result.graphData);
-                                    if (newSig !== graphSignature(inst.graphData)) {
-                                        inst.graphData = result.graphData;
-                                        inst.specName = result.specName;
-                                        inst.html = renderGraphHtml(result.graphData, { title: result.specName, isDemo: false });
-                                        inst.isLanding = false;
-                                    }
-                                }
+                                // Reload from the same source the agent loaded (sourceFilePath),
+                                // falling back to a .spec/ folder scan, so the refresh button / poll
+                                // stay in lock-step with load_specification.
+                                await reloadInstanceFromSource(inst, wp);
                                 // Reload whenever the loaded graph differs from what the browser
                                 // currently displays — covers on-disk edits and load_specification.
-                                const currentSig = graphSignature(inst.graphData);
-                                const refreshed = currentSig !== (inst.servedSignature || "");
+                                const refreshed = graphSignature(inst.graphData) !== (inst.servedSignature || "");
                                 res.setHeader("Content-Type", "application/json");
                                 res.end(JSON.stringify({
                                     refreshed,
@@ -1001,7 +1047,7 @@ const session = await joinSession({
                 await new Promise((r) => server.listen(0, "127.0.0.1", r));
                 const url = `http://127.0.0.1:${server.address().port}/`;
 
-                instances.set(ctx.instanceId, { server, url, html, graphData, specName });
+                instances.set(ctx.instanceId, { server, url, html, graphData, specName, sourceFilePath });
 
                 return { title: `SRS: ${specName}`, url };
             },
@@ -1031,3 +1077,28 @@ function summarizeGraph(graphData) {
         nonFunctionalRequirements: types.nfr
     };
 }
+
+// Completion hook: when the agent finishes a turn (e.g. after an action-bar
+// request runs a skill that edits the spec), reload every open canvas from its
+// source so the UI reflects the change even when the agent did not explicitly
+// call the load_specification action. The browser's auto-refresh poll then
+// reloads the graph. We never call session.send() here, so reacting to the
+// agent finishing cannot trigger another agent turn (no feedback loop).
+let idleRefreshRunning = false;
+session.on("session.idle", () => {
+    if (idleRefreshRunning) return;
+    idleRefreshRunning = true;
+    (async () => {
+        const wp = derivedWorkspacePath || session.workspacePath || process.env.COPILOT_WORKSPACE_PATH || "";
+        for (const inst of instances.values()) {
+            try {
+                const changed = await reloadInstanceFromSource(inst, wp);
+                if (changed) {
+                    try {
+                        session.log(`[srs-nav] Spec changed — refreshing canvas: ${inst.specName}`, { ephemeral: true });
+                    } catch { /* logging is best-effort */ }
+                }
+            } catch { /* ignore per-instance refresh errors */ }
+        }
+    })().finally(() => { idleRefreshRunning = false; });
+});
