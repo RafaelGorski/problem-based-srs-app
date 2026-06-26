@@ -22,7 +22,7 @@ const NODE_ICONS = {
  * Styled to match the original Problem-Based SRS Navigator
  */
 export function renderGraphHtml(graphData, options = {}) {
-  const { title = 'SRS Navigator', analysisMode = 'customer-problem', selectedNodeId = null, isDemo = false } = options;
+  const { title = 'SRS Navigator', analysisMode = 'customer-problem', selectedNodeId = null, isDemo = false, showLanding = false } = options;
   const graphJSON = JSON.stringify(graphData);
 
   return `<!DOCTYPE html>
@@ -953,6 +953,201 @@ export function renderGraphHtml(graphData, options = {}) {
     @media (prefers-reduced-motion: reduce) {
       .action-bar { transition: none; }
       .action-bar-btn::after { transition: none; }
+    }
+
+    /* Landing overlay (shown on top of demo graph) */
+    .landing-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 200;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: oklch(0.98 0 0 / 0.55);
+      backdrop-filter: blur(6px) saturate(0.7);
+      -webkit-backdrop-filter: blur(6px) saturate(0.7);
+      transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), backdrop-filter 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .landing-overlay.dismissing {
+      opacity: 0;
+      backdrop-filter: blur(0px) saturate(1);
+      -webkit-backdrop-filter: blur(0px) saturate(1);
+      pointer-events: none;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .landing-overlay { transition: none; }
+      .landing-overlay.dismissing { transition: none; }
+    }
+
+    .landing-panel {
+      max-width: 480px;
+      width: calc(100% - 48px);
+      padding: 32px 28px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 28px;
+      background: oklch(1 0 0 / 0.88);
+      border: 1px solid oklch(0.87 0.01 240 / 0.6);
+      border-radius: 12px;
+      box-shadow: 0 16px 48px oklch(0 0 0 / 0.10), 0 0 0 1px oklch(0 0 0 / 0.03);
+    }
+
+    .landing-panel-header {
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+    }
+    .landing-panel-icon {
+      width: 48px;
+      height: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 10px;
+      background: var(--primary);
+      color: var(--primary-foreground);
+    }
+    .landing-panel-icon svg { width: 24px; height: 24px; }
+    .landing-panel-header h2 {
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      line-height: 1.2;
+      color: var(--foreground);
+      text-wrap: balance;
+    }
+    .landing-panel-header p {
+      font-size: 13px;
+      line-height: 1.6;
+      color: oklch(0.35 0.02 240);
+      max-width: 380px;
+      text-wrap: pretty;
+    }
+
+    .landing-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      width: 100%;
+      max-width: 320px;
+    }
+    .landing-action-btn {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      width: 100%;
+      padding: 14px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: oklch(1 0 0 / 0.95);
+      color: var(--foreground);
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 500;
+      text-align: left;
+      cursor: pointer;
+      transition: background 0.15s ease-out, border-color 0.15s ease-out, transform 0.15s ease-out;
+    }
+    .landing-action-btn:hover {
+      background: oklch(0.97 0.005 240);
+      border-color: oklch(0.78 0.02 240);
+    }
+    .landing-action-btn:active {
+      transform: scale(0.985);
+    }
+    .landing-action-btn.primary {
+      background: var(--primary);
+      color: var(--primary-foreground);
+      border-color: var(--primary);
+    }
+    .landing-action-btn.primary:hover {
+      background: oklch(0.30 0.12 265);
+      border-color: oklch(0.30 0.12 265);
+    }
+    .landing-action-icon {
+      width: 32px;
+      height: 32px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 6px;
+      background: oklch(0.95 0.01 240);
+    }
+    .landing-action-btn.primary .landing-action-icon {
+      background: oklch(0.28 0.10 265);
+    }
+    .landing-action-icon svg { width: 16px; height: 16px; }
+    .landing-action-text {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+      min-width: 0;
+    }
+    .landing-action-text .label {
+      font-weight: 600;
+      font-size: 13px;
+      line-height: 1.3;
+    }
+    .landing-action-text .desc {
+      font-size: 11px;
+      font-weight: 400;
+      color: oklch(0.45 0.02 240);
+      line-height: 1.4;
+    }
+    .landing-action-btn.primary .landing-action-text .desc {
+      color: oklch(0.78 0.03 265);
+    }
+
+    .landing-features {
+      width: 100%;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+      padding-top: 4px;
+      border-top: 1px solid oklch(0.90 0.01 240);
+    }
+    .landing-feature {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 8px;
+    }
+    .landing-feature-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .landing-feature:nth-child(1) .landing-feature-dot { background: var(--node-problem); }
+    .landing-feature:nth-child(2) .landing-feature-dot { background: var(--node-need); }
+    .landing-feature:nth-child(3) .landing-feature-dot { background: var(--node-fr); }
+    .landing-feature:nth-child(4) .landing-feature-dot { background: var(--node-nfr); }
+    .landing-feature:nth-child(5) .landing-feature-dot { background: var(--accent); }
+    .landing-feature:nth-child(6) .landing-feature-dot { background: var(--primary); }
+    .landing-feature-text {
+      font-size: 11px;
+      font-weight: 500;
+      line-height: 1.3;
+      color: oklch(0.35 0.02 240);
+    }
+
+    .landing-action-btn.loading {
+      pointer-events: none;
+      opacity: 0.7;
+    }
+    .landing-action-btn.loading .landing-action-icon {
+      animation: landing-pulse 1.5s ease-in-out infinite;
+    }
+    @keyframes landing-pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .landing-action-btn.loading .landing-action-icon { animation: none; }
     }
   </style>
 </head>
@@ -2079,6 +2274,124 @@ export function renderGraphHtml(graphData, options = {}) {
     };
   })();
   <\/script>
+${showLanding ? `
+  <div class="landing-overlay" id="landing-overlay" role="dialog" aria-modal="true" aria-label="Get started with SRS Navigator">
+    <div class="landing-panel">
+      <div class="landing-panel-header">
+        <div class="landing-panel-icon" aria-hidden="true">
+          <svg viewBox="0 0 256 256" fill="currentColor"><path d="M208,32H48A16,16,0,0,0,32,48V208a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V48A16,16,0,0,0,208,32ZM172.27,96,128,154.16,83.73,96ZM48,48H208V80.24L136.62,170.06a12,12,0,0,1-17.24,0L48,80.24Zm0,160V105.76l60,73.5a28,28,0,0,0,40,0l60-73.5V208Z"/></svg>
+        </div>
+        <h2>SRS Navigator</h2>
+        <p>Visualize Problem-Based SRS specifications as interactive graphs. Trace how customer problems flow through needs into requirements — all without leaving your workflow.</p>
+      </div>
+
+      <div class="landing-actions">
+        <button class="landing-action-btn primary" id="landing-btn-learn" aria-label="Create a specification from your project">
+          <span class="landing-action-icon" aria-hidden="true">
+            <svg viewBox="0 0 256 256" fill="currentColor"><path d="M232,128a8,8,0,0,1-8,8H136v88a8,8,0,0,1-16,0V136H32a8,8,0,0,1,0-16h88V32a8,8,0,0,1,16,0v88h88A8,8,0,0,1,232,128Z"/></svg>
+          </span>
+          <span class="landing-action-text">
+            <span class="label">Learn &amp; Create Spec</span>
+            <span class="desc">Scan your project and generate a specification</span>
+          </span>
+        </button>
+        <button class="landing-action-btn" id="landing-btn-demo" aria-label="Explore this demo specification">
+          <span class="landing-action-icon" aria-hidden="true">
+            <svg viewBox="0 0 256 256" fill="currentColor"><path d="M208,24H72A32,32,0,0,0,40,56V224a8,8,0,0,0,8,8H192a8,8,0,0,0,0-16H56a16,16,0,0,1,16-16H208a8,8,0,0,0,8-8V32A8,8,0,0,0,208,24Zm-8,160H72a31.82,31.82,0,0,0-16,4.29V56A16,16,0,0,1,72,40H200Z"/></svg>
+          </span>
+          <span class="landing-action-text">
+            <span class="label">Explore Demo</span>
+            <span class="desc">Dismiss this panel and interact with the sample graph</span>
+          </span>
+        </button>
+        <button class="landing-action-btn" id="landing-btn-load" aria-label="Load an existing specification file">
+          <span class="landing-action-icon" aria-hidden="true">
+            <svg viewBox="0 0 256 256" fill="currentColor"><path d="M213.66,82.34l-56-56A8,8,0,0,0,152,24H56A16,16,0,0,0,40,40V216a16,16,0,0,0,16,16H200a16,16,0,0,0,16-16V88A8,8,0,0,0,213.66,82.34ZM160,51.31,188.69,80H160ZM200,216H56V40h88V88a8,8,0,0,0,8,8h48V216Z"/></svg>
+          </span>
+          <span class="landing-action-text">
+            <span class="label">Load Specification</span>
+            <span class="desc">Open an existing .spec JSON file</span>
+          </span>
+        </button>
+      </div>
+
+      <div class="landing-features">
+        <div class="landing-feature"><span class="landing-feature-dot" aria-hidden="true"></span><span class="landing-feature-text">Force-directed graph</span></div>
+        <div class="landing-feature"><span class="landing-feature-dot" aria-hidden="true"></span><span class="landing-feature-text">Problem → Requirement tracing</span></div>
+        <div class="landing-feature"><span class="landing-feature-dot" aria-hidden="true"></span><span class="landing-feature-text">Focused analysis modes</span></div>
+        <div class="landing-feature"><span class="landing-feature-dot" aria-hidden="true"></span><span class="landing-feature-text">Node detail &amp; connections</span></div>
+        <div class="landing-feature"><span class="landing-feature-dot" aria-hidden="true"></span><span class="landing-feature-text">Search &amp; filter</span></div>
+        <div class="landing-feature"><span class="landing-feature-dot" aria-hidden="true"></span><span class="landing-feature-text">Agent-driven generation</span></div>
+      </div>
+    </div>
+  </div>
+  <script>
+  (() => {
+    const overlay = document.getElementById('landing-overlay');
+    const btnLearn = document.getElementById('landing-btn-learn');
+    const btnDemo = document.getElementById('landing-btn-demo');
+    const btnLoad = document.getElementById('landing-btn-load');
+
+    function setLoading(btn, loading) {
+      btn.classList.toggle('loading', loading);
+      btn.disabled = loading;
+    }
+
+    function dismissOverlay() {
+      overlay.classList.add('dismissing');
+      setTimeout(() => overlay.remove(), 300);
+    }
+
+    btnDemo.addEventListener('click', () => {
+      dismissOverlay();
+    });
+
+    btnLearn.addEventListener('click', async () => {
+      setLoading(btnLearn, true);
+      try {
+        const res = await fetch('/api/landing-action', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'learn' })
+        });
+        const data = await res.json();
+        if (data.ok) startPolling();
+        else setLoading(btnLearn, false);
+      } catch { setLoading(btnLearn, false); }
+    });
+
+    btnLoad.addEventListener('click', async () => {
+      setLoading(btnLoad, true);
+      try {
+        const res = await fetch('/api/landing-action', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'load' })
+        });
+        const data = await res.json();
+        if (data.ok) startPolling();
+        else setLoading(btnLoad, false);
+      } catch { setLoading(btnLoad, false); }
+    });
+
+    let polling = false;
+    function startPolling() {
+      if (polling) return;
+      polling = true;
+      const iv = setInterval(async () => {
+        try {
+          const res = await fetch('/api/check-spec');
+          const data = await res.json();
+          if (data.found) {
+            clearInterval(iv);
+            window.location.reload();
+          }
+        } catch {}
+      }, 3000);
+    }
+  })();
+  <\/script>
+` : ''}
 </body>
 </html>`;
 }

@@ -11,7 +11,7 @@ import { joinSession, createCanvas, CanvasError } from "@github/copilot-sdk/exte
 
 import { parseSpecificationData, buildGraphData, convertJSONToSpecificationData } from "./lib/parser.mjs";
 import { validateSpecificationJSON, validateReferenceIntegrity } from "./lib/validation.mjs";
-import { renderGraphHtml, renderLandingHtml } from "./lib/renderer.mjs";
+import { renderGraphHtml } from "./lib/renderer.mjs";
 import { DEMO_SPEC } from "./lib/demo-spec.mjs";
 import { backgroundSync } from "./lib/skills-sync.mjs";
 import { compileAndSave, compileSpecFromFolder } from "./lib/spec-compiler.mjs";
@@ -513,8 +513,13 @@ const session = await joinSession({
                         graphData = fromFolder.graphData;
                         specName = fromFolder.specName;
                     } else {
-                        // No spec found — show landing page
-                        const landingHtml = renderLandingHtml();
+                        // No spec found — show landing overlay on top of demo graph
+                        const demoResult = loadAndBuildGraph(DEMO_SPEC);
+                        const landingHtml = renderGraphHtml(demoResult.graphData, {
+                            title: demoResult.specName,
+                            isDemo: true,
+                            showLanding: true
+                        });
                         const workspacePathResolved = session.workspacePath || ctx.host?.workspacePath;
 
                         const server = createServer((req, res) => {
@@ -636,7 +641,7 @@ const session = await joinSession({
                         await new Promise((r) => server.listen(0, "127.0.0.1", r));
                         const url = `http://127.0.0.1:${server.address().port}/`;
 
-                        instances.set(ctx.instanceId, { server, url, html: landingHtml, graphData: null, specName: null, isLanding: true });
+                        instances.set(ctx.instanceId, { server, url, html: landingHtml, graphData: demoResult.graphData, specName: demoResult.specName, isLanding: true });
 
                         // Trigger background skills sync (non-blocking)
                         backgroundSync(skillsDir, (msg) => session.log(msg)).catch(() => {});
