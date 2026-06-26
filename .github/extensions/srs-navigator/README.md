@@ -143,6 +143,75 @@ open_canvas({
 | `get_summary` | Get node/link counts for the loaded spec |
 | `search_nodes` | Search nodes by ID or label text |
 
+## Architecture & Agent Integration
+
+The canvas runs as a local HTTP server (one per instance) whose page is rendered in the Copilot side panel. The **action bar** in the graph UI talks to the agent, the agent edits the specification files in the repo, and the canvas **auto-reloads** the graph when the spec changes — no re-installation or re-download of the extension is involved.
+
+### Action bar ⇄ agent flow
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant Bar as Action Bar (canvas UI)
+    participant Srv as Extension HTTP Server
+    participant Agent as Copilot Agent
+    participant Spec as .spec/*.json (repo)
+
+    User->>Bar: Click +CN / +FR / decompose (with optional prompt)
+    Bar->>Srv: POST /api/invoke-skill (node + context)
+    Srv->>Agent: session.send(prompt → run skill)
+    Srv-->>Bar: { ok: true }
+    Note over Bar: Toast: "Agent processing…"
+
+    Agent->>Agent: Run Problem-Based SRS skill
+    Agent->>Spec: Write / update specification file
+    opt Agent confirms display
+        Agent->>Srv: load_specification canvas action
+    end
+
+    loop Every 3s (auto-refresh poll)
+        Bar->>Srv: GET /api/refresh-spec
+        Srv->>Spec: Re-read spec from disk
+        Srv->>Srv: Compare content fingerprint vs displayed
+        Srv-->>Bar: { refreshed: true | false }
+    end
+
+    Bar->>Bar: window.location.reload()
+    Bar->>Srv: GET / (fresh HTML with new graph)
+    Srv-->>Bar: Updated graph
+    Note over User,Bar: Graph updates in place — no re-install
+```
+
+### Component view
+
+```mermaid
+flowchart LR
+    subgraph Panel["Copilot Side Panel (webview)"]
+        UI["D3 Graph + Action Bar"]
+    end
+    subgraph Ext["srs-navigator extension process"]
+        Server["HTTP server<br/>/api/invoke-skill<br/>/api/refresh-spec"]
+        Canvas["createCanvas()<br/>open + actions"]
+        Skills["Bundled skills/*.md<br/>(read-only, no download)"]
+    end
+    Agent["Copilot Agent / Session"]
+    Repo[(".spec/ JSON + markdown")]
+
+    UI -- "fetch /api/*" --> Server
+    Server -- "session.send()" --> Agent
+    Agent -- "edits files" --> Repo
+    Server -- "reads on poll" --> Repo
+    Canvas -- "load_specification" --> Server
+    Canvas --- Skills
+    Server -- "serves graph HTML" --> UI
+```
+
+**Key design points:**
+
+- **Content-based refresh.** `/api/refresh-spec` compares a fingerprint of the loaded graph against what the browser currently displays, so the canvas reloads on *any* spec change — not only when node/link counts differ.
+- **Continuous polling.** The live graph polls every 3s and reloads itself when the spec changes, whether the agent edits `.spec/` directly or calls the `load_specification` action.
+- **Bundled skills.** Methodology skills ship inside the extension and are read locally. The extension does **not** download skill files at runtime, so opening the canvas never triggers an extension re-install / "downloaded" notification.
+
 ### Specification Format
 
 The extension accepts specifications in the Problem-Based SRS JSON format:
@@ -173,10 +242,10 @@ Run the test suite with Node.js built-in test runner:
 
 ```bash
 cd .github/extensions/srs-navigator
-node --test tests/parser.test.mjs tests/validation.test.mjs tests/renderer.test.mjs tests/integration.test.mjs
+node --test tests/parser.test.mjs tests/validation.test.mjs tests/renderer.test.mjs tests/action-bar.test.mjs tests/integration.test.mjs
 ```
 
-Expected output: **68 tests passing** (parser: 16, validation: 19, renderer: 20, integration: 13).
+Expected output: **117 tests passing** across the parser, validation, renderer, action-bar, and integration suites. (The Playwright-based `visual.test.mjs` requires `@playwright/test` to be installed separately.)
 
 ## Requirements
 

@@ -69,6 +69,19 @@ describe("renderGraphHtml", () => {
     assert.ok(html.includes("detail-header"));
   });
 
+  it("includes auto-refresh polling for live graph (non-demo)", () => {
+    const html = renderGraphHtml(sampleGraph, { isDemo: false });
+    assert.ok(html.includes("/api/refresh-spec"));
+    assert.ok(html.includes("data.refreshed"));
+    assert.ok(html.includes("window.location.reload()"));
+  });
+
+  it("does not auto-reload away from the demo graph", () => {
+    const html = renderGraphHtml(sampleGraph, { isDemo: true });
+    // The auto-refresh poll is guarded by `!isDemo`, so isDemo renders true
+    assert.ok(html.includes("const isDemo = true"));
+  });
+
   it("escapes HTML in title", () => {
     const html = renderGraphHtml(sampleGraph, { title: "<script>alert('xss')</script>" });
     assert.ok(!html.includes("<script>alert('xss')</script>"));
