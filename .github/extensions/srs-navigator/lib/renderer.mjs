@@ -1224,7 +1224,7 @@ export function renderGraphHtml(graphData, options = {}) {
       <button class="btn-icon" id="zoom-out" title="Zoom out" aria-label="Zoom out">
         <svg viewBox="0 0 256 256" fill="currentColor"><path d="M229.66,218.34l-50.07-50.06a88.11,88.11,0,1,0-11.31,11.31l50.06,50.07a8,8,0,0,0,11.32-11.32ZM40,112a72,72,0,1,1,72,72A72.08,72.08,0,0,1,40,112Zm104,0a8,8,0,0,1-8,8H88a8,8,0,0,1,0-16h48A8,8,0,0,1,144,112Z"/></svg>
       </button>
-      <button class="btn-icon" id="zoom-reset" title="Reset zoom" aria-label="Reset zoom">
+      <button class="btn-icon" id="zoom-reset" title="Refresh graph from spec" aria-label="Refresh graph from spec">
         <svg viewBox="0 0 256 256" fill="currentColor"><path d="M216,48V96a8,8,0,0,1-8,8H160a8,8,0,0,1,0-16h28.69L163.31,62.63A80,80,0,0,0,48,128a8,8,0,0,1-16,0A96,96,0,0,1,174.63,51.37L200,76.69V48a8,8,0,0,1,16,0ZM224,120a8,8,0,0,0-8,8A80,80,0,0,1,92.69,193.37L68,168H96a8,8,0,0,0,0-16H48a8,8,0,0,0-8,8v48a8,8,0,0,0,16,0V179.31l25.37,25.32A96,96,0,0,0,232,128,8,8,0,0,0,224,120Z"/></svg>
       </button>
     </div>
@@ -1354,7 +1354,24 @@ export function renderGraphHtml(graphData, options = {}) {
       svg.transition().duration(300).call(zoom.scaleBy, 0.7);
     });
     document.getElementById("zoom-reset").addEventListener("click", () => {
-      svg.transition().duration(750).call(zoom.transform, d3.zoomIdentity);
+      const btn = document.getElementById("zoom-reset");
+      btn.disabled = true;
+      btn.style.opacity = "0.5";
+      fetch("/api/refresh-spec").then(async res => {
+        const data = await res.json().catch(() => ({}));
+        if (data.refreshed) {
+          window.location.reload();
+        } else {
+          // No newer spec found — fall back to zoom reset
+          svg.transition().duration(750).call(zoom.transform, d3.zoomIdentity);
+          btn.disabled = false;
+          btn.style.opacity = "";
+        }
+      }).catch(() => {
+        svg.transition().duration(750).call(zoom.transform, d3.zoomIdentity);
+        btn.disabled = false;
+        btn.style.opacity = "";
+      });
     });
 
     // Build simulation
