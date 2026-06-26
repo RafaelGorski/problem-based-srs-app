@@ -2157,6 +2157,7 @@ export function renderGraphHtml(graphData, options = {}) {
     // Spec modal (unified: learn, load, demo)
     const specModal = document.getElementById("spec-modal");
     const showLandingOnLoad = ${showLanding};
+    const isDemo = ${isDemo};
 
     function setModalLoading(btn, loading) {
       btn.classList.toggle('loading', loading);
@@ -2325,6 +2326,23 @@ export function renderGraphHtml(graphData, options = {}) {
     // Show toast on load if it's the demo
     if (isDemo) {
       setTimeout(() => showToast("Demo: CRM System loaded — use the agent to load your own spec"), 1000);
+    }
+
+    // Continuously watch for spec changes and auto-reload the graph.
+    // The agent edits the spec file in the repo (.spec/) directly or via the
+    // load_specification canvas action; this poll detects the change and
+    // refreshes the UI without re-installing the extension.
+    if (!showLandingOnLoad && !isDemo) {
+      setInterval(async () => {
+        try {
+          const res = await fetch("/api/refresh-spec");
+          const data = await res.json().catch(() => ({}));
+          if (data.refreshed) {
+            showToast("✓ Spec updated — reloading graph...");
+            setTimeout(() => window.location.reload(), 400);
+          }
+        } catch { /* keep polling */ }
+      }, 3000);
     }
 
     // Public API

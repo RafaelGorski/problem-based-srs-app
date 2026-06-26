@@ -5,6 +5,7 @@
 
 import { createServer } from "node:http";
 import { readFile, readdir } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { resolve, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { joinSession, createCanvas, CanvasError } from "@github/copilot-sdk/extension";
@@ -13,8 +14,29 @@ import { parseSpecificationData, buildGraphData, convertJSONToSpecificationData 
 import { validateSpecificationJSON, validateReferenceIntegrity } from "./lib/validation.mjs";
 import { renderGraphHtml } from "./lib/renderer.mjs";
 import { DEMO_SPEC } from "./lib/demo-spec.mjs";
-import { backgroundSync } from "./lib/skills-sync.mjs";
 import { compileAndSave, compileSpecFromFolder } from "./lib/spec-compiler.mjs";
+
+// Content fingerprint of a graph, used to detect *any* change to the loaded
+// specification (not just node/link count changes) so the canvas can reload
+// the graph whenever the underlying spec file is edited.
+function graphSignature(graphData) {
+    if (!graphData) return "";
+    const norm = {
+        nodes: (graphData.nodes || []).map((n) => ({
+            id: n.id,
+            type: n.type,
+            label: n.label,
+            complexity: n.complexity,
+            data: n.data,
+        })),
+        links: (graphData.links || []).map((l) => ({
+            s: typeof l.source === "object" ? l.source?.id : l.source,
+            t: typeof l.target === "object" ? l.target?.id : l.target,
+            type: l.type,
+        })),
+    };
+    return createHash("sha1").update(JSON.stringify(norm)).digest("hex");
+}
 
 // Skills directory path
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -726,27 +748,34 @@ const session = await joinSession({
                             if (req.url === "/api/refresh-spec" && req.method === "GET") {
                                 (async () => {
                                     try {
-                                        const result = workspacePathResolved ? await loadFromSpecFolder(workspacePathResolved) : null;
-                                        if (result && inst) {
-                                            // Detect if spec actually changed
-                                            const oldNodes = inst.graphData?.nodes?.length || 0;
-                                            const oldLinks = inst.graphData?.links?.length || 0;
-                                            const newNodes = result.graphData.nodes.length;
-                                            const newLinks = result.graphData.links.length;
-                                            const changed = inst.isLanding || oldNodes !== newNodes || oldLinks !== newLinks || inst.specName !== result.specName;
-                                            if (changed) {
-                                                const html = renderGraphHtml(result.graphData, { title: result.specName, isDemo: false });
-                                                inst.graphData = result.graphData;
-                                                inst.specName = result.specName;
-                                                inst.html = html;
-                                                inst.isLanding = false;
-                                            }
-                                            res.setHeader("Content-Type", "application/json");
-                                            res.end(JSON.stringify({ refreshed: changed, specName: result.specName, nodeCount: newNodes, linkCount: newLinks }));
-                                        } else {
+                                        if (!inst) {
                                             res.setHeader("Content-Type", "application/json");
                                             res.end(JSON.stringify({ refreshed: false }));
+                                            return;
                                         }
+                                        const result = workspacePathResolved ? await loadFromSpecFolder(workspacePathResolved) : null;
+                                        if (result) {
+                                            // Re-read the spec from disk and detect content changes (not just counts)
+                                            const newSig = graphSignature(result.graphData);
+                                            if (newSig !== graphSignature(inst.graphData)) {
+                                                inst.graphData = result.graphData;
+                                                inst.specName = result.specName;
+                                                inst.html = renderGraphHtml(result.graphData, { title: result.specName, isDemo: false });
+                                                inst.isLanding = false;
+                                            }
+                                        }
+                                        // Reload whenever the loaded graph differs from what the
+                                        // browser currently displays — covers both on-disk edits and
+                                        // out-of-band updates from the load_specification action.
+                                        const currentSig = graphSignature(inst.graphData);
+                                        const refreshed = currentSig !== (inst.servedSignature || "");
+                                        res.setHeader("Content-Type", "application/json");
+                                        res.end(JSON.stringify({
+                                            refreshed,
+                                            specName: inst.specName,
+                                            nodeCount: inst.graphData?.nodes?.length || 0,
+                                            linkCount: inst.graphData?.links?.length || 0,
+                                        }));
                                     } catch {
                                         res.setHeader("Content-Type", "application/json");
                                         res.end(JSON.stringify({ refreshed: false }));
@@ -767,6 +796,7 @@ const session = await joinSession({
                             }
 
                             res.setHeader("Content-Type", "text/html; charset=utf-8");
+                            if (inst) inst.servedSignature = graphSignature(inst.graphData);
                             res.end(inst?.html || landingHtml);
                         });
 
@@ -774,9 +804,6 @@ const session = await joinSession({
                         const url = `http://127.0.0.1:${server.address().port}/`;
 
                         instances.set(ctx.instanceId, { server, url, html: landingHtml, graphData: demoResult.graphData, specName: demoResult.specName, isLanding: true });
-
-                        // Trigger background skills sync (non-blocking)
-                        backgroundSync(skillsDir, (msg) => session.log(msg)).catch(() => {});
 
                         return { title: "SRS Navigator", url };
                     }
@@ -859,27 +886,34 @@ const session = await joinSession({
                     if (req.url === "/api/refresh-spec" && req.method === "GET") {
                         (async () => {
                             try {
-                                const wp = derivedWorkspacePath || process.env.COPILOT_WORKSPACE_PATH || "";
-                                const result = wp ? await loadFromSpecFolder(wp) : null;
-                                if (result && inst) {
-                                    const oldNodes = inst.graphData?.nodes?.length || 0;
-                                    const oldLinks = inst.graphData?.links?.length || 0;
-                                    const newNodes = result.graphData.nodes.length;
-                                    const newLinks = result.graphData.links.length;
-                                    const changed = oldNodes !== newNodes || oldLinks !== newLinks || inst.specName !== result.specName;
-                                    if (changed) {
-                                        const newHtml = renderGraphHtml(result.graphData, { title: result.specName, isDemo: false });
-                                        inst.graphData = result.graphData;
-                                        inst.specName = result.specName;
-                                        inst.html = newHtml;
-                                        inst.isLanding = false;
-                                    }
-                                    res.setHeader("Content-Type", "application/json");
-                                    res.end(JSON.stringify({ refreshed: changed, specName: result.specName, nodeCount: newNodes, linkCount: newLinks }));
-                                } else {
+                                if (!inst) {
                                     res.setHeader("Content-Type", "application/json");
                                     res.end(JSON.stringify({ refreshed: false }));
+                                    return;
                                 }
+                                const wp = derivedWorkspacePath || process.env.COPILOT_WORKSPACE_PATH || "";
+                                const result = wp ? await loadFromSpecFolder(wp) : null;
+                                if (result) {
+                                    // Re-read the spec from disk and detect content changes (not just counts)
+                                    const newSig = graphSignature(result.graphData);
+                                    if (newSig !== graphSignature(inst.graphData)) {
+                                        inst.graphData = result.graphData;
+                                        inst.specName = result.specName;
+                                        inst.html = renderGraphHtml(result.graphData, { title: result.specName, isDemo: false });
+                                        inst.isLanding = false;
+                                    }
+                                }
+                                // Reload whenever the loaded graph differs from what the browser
+                                // currently displays — covers on-disk edits and load_specification.
+                                const currentSig = graphSignature(inst.graphData);
+                                const refreshed = currentSig !== (inst.servedSignature || "");
+                                res.setHeader("Content-Type", "application/json");
+                                res.end(JSON.stringify({
+                                    refreshed,
+                                    specName: inst.specName,
+                                    nodeCount: inst.graphData?.nodes?.length || 0,
+                                    linkCount: inst.graphData?.links?.length || 0,
+                                }));
                             } catch {
                                 res.setHeader("Content-Type", "application/json");
                                 res.end(JSON.stringify({ refreshed: false }));
@@ -960,6 +994,7 @@ const session = await joinSession({
                         return;
                     }
                     res.setHeader("Content-Type", "text/html; charset=utf-8");
+                    if (inst) inst.servedSignature = graphSignature(inst.graphData);
                     res.end(inst?.html || html);
                 });
 
@@ -967,9 +1002,6 @@ const session = await joinSession({
                 const url = `http://127.0.0.1:${server.address().port}/`;
 
                 instances.set(ctx.instanceId, { server, url, html, graphData, specName });
-
-                // Trigger background skills sync (non-blocking)
-                backgroundSync(skillsDir, (msg) => session.log(msg)).catch(() => {});
 
                 return { title: `SRS: ${specName}`, url };
             },
@@ -999,6 +1031,3 @@ function summarizeGraph(graphData) {
         nonFunctionalRequirements: types.nfr
     };
 }
-
-// Trigger background skills sync on extension startup
-backgroundSync(skillsDir, (msg) => session.log(msg)).catch(() => {});
