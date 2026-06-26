@@ -667,6 +667,26 @@ export function renderGraphHtml(graphData, options = {}) {
     }
     .toast.show { transform: translateY(0); opacity: 1; }
     .toast svg { color: oklch(0.55 0.18 145); flex-shrink: 0; }
+    .toast.toast-pending svg { color: oklch(0.65 0.15 265); }
+    .toast.toast-error svg { color: oklch(0.60 0.22 25); }
+    .toast-detail {
+      font-size: 11px;
+      color: oklch(0.55 0.12 25);
+      cursor: pointer;
+      text-decoration: underline;
+      text-decoration-style: dotted;
+      text-underline-offset: 2px;
+      margin-left: 4px;
+    }
+    .toast-detail:hover { color: oklch(0.70 0.15 25); }
+    .toast-dismiss {
+      margin-left: 8px;
+      cursor: pointer;
+      color: oklch(0.50 0.02 265);
+      font-size: 16px;
+      line-height: 1;
+    }
+    .toast-dismiss:hover { color: oklch(0.80 0.02 265); }
 
     /* Responsive: narrow widths */
     @media (max-width: 720px) {
@@ -889,8 +909,10 @@ export function renderGraphHtml(graphData, options = {}) {
 
   <!-- Toast notification -->
   <div class="toast" id="toast">
-    <svg width="16" height="16" viewBox="0 0 256 256" fill="currentColor"><path d="M173.66,98.34a8,8,0,0,1,0,11.32l-56,56a8,8,0,0,1-11.32,0l-24-24a8,8,0,0,1,11.32-11.32L112,148.69l50.34-50.35A8,8,0,0,1,173.66,98.34ZM232,128A104,104,0,1,1,128,24,104.11,104.11,0,0,1,232,128Zm-16,0a88,88,0,1,0-88,88A88.1,88.1,0,0,0,216,128Z"/></svg>
+    <svg id="toast-icon" width="16" height="16" viewBox="0 0 256 256" fill="currentColor"><path d="M173.66,98.34a8,8,0,0,1,0,11.32l-56,56a8,8,0,0,1-11.32,0l-24-24a8,8,0,0,1,11.32-11.32L112,148.69l50.34-50.35A8,8,0,0,1,173.66,98.34ZM232,128A104,104,0,1,1,128,24,104.11,104.11,0,0,1,232,128Zm-16,0a88,88,0,1,0-88,88A88.1,88.1,0,0,0,216,128Z"/></svg>
     <span id="toast-text"></span>
+    <a class="toast-detail" id="toast-detail" style="display:none"></a>
+    <span class="toast-dismiss" id="toast-dismiss" title="Dismiss">&times;</span>
   </div>
 
   <!-- Action bar: appears on node hover -->
@@ -1211,7 +1233,6 @@ export function renderGraphHtml(graphData, options = {}) {
 
       if (actionKey === "submit") {
         if (!prompt) return;
-        // Freeform prompt uses the node's own type skill
         const typeSkillMap = { problem: "customer_problems", need: "customer_needs", fr: "functional_requirements", nfr: "functional_requirements" };
         skillName = typeSkillMap[node.type] || "customer_problems";
         context = "Regarding " + nodeLabel + " " + node.id + " (" + node.label + "): " + prompt;
@@ -1231,7 +1252,10 @@ export function renderGraphHtml(graphData, options = {}) {
 
       if (!context || !skillName) return;
 
-      // Send action to the extension server for agent consumption
+      // Show persistent pending status
+      showToast("⏳ Sending to agent: " + skillName + " on " + node.id + "...", { variant: "pending", persistent: true });
+
+      // Send action to the extension server → triggers session.send()
       const serverBase = location.origin;
       fetch(serverBase + "/api/invoke-skill", {
         method: "POST",
@@ -1244,14 +1268,23 @@ export function renderGraphHtml(graphData, options = {}) {
           nodeLabel: node.label,
           context: context,
         }),
-      }).then(res => {
-        if (res.ok) {
-          showToast("⚡ Skill invoked: " + skillName + " → agent processing...");
+      }).then(async res => {
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data.ok) {
+          showToast("✓ Agent received: " + skillName + " → processing " + node.id);
         } else {
-          showToast("⚠ Failed to invoke skill");
+          showToast("⚠ Failed to reach agent", {
+            variant: "error",
+            persistent: true,
+            detail: data.detail || data.error || ("HTTP " + res.status),
+          });
         }
-      }).catch(() => {
-        showToast("⚠ Connection error");
+      }).catch(err => {
+        showToast("⚠ Connection error", {
+          variant: "error",
+          persistent: true,
+          detail: err.message || "Could not reach the extension server. Check if the canvas is still running.",
+        });
       });
 
       actionBarInput.value = "";
@@ -1624,12 +1657,58 @@ export function renderGraphHtml(graphData, options = {}) {
     });
 
     // Toast
-    function showToast(message) {
+    const TOAST_ICONS = {
+      success: '<path d="M173.66,98.34a8,8,0,0,1,0,11.32l-56,56a8,8,0,0,1-11.32,0l-24-24a8,8,0,0,1,11.32-11.32L112,148.69l50.34-50.35A8,8,0,0,1,173.66,98.34ZM232,128A104,104,0,1,1,128,24,104.11,104.11,0,0,1,232,128Zm-16,0a88,88,0,1,0-88,88A88.1,88.1,0,0,0,216,128Z"/>',
+      pending: '<path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm0,192a88,88,0,1,1,88-88A88.1,88.1,0,0,1,128,216Zm64-88a8,8,0,0,1-8,8H128a8,8,0,0,1-8-8V72a8,8,0,0,1,16,0v48h48A8,8,0,0,1,192,128Z"/>',
+      error: '<path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm0,192a88,88,0,1,1,88-88A88.1,88.1,0,0,1,128,216Zm-8-80V80a8,8,0,0,1,16,0v56a8,8,0,0,1-16,0Zm20,36a12,12,0,1,1-12-12A12,12,0,0,1,140,172Z"/>',
+    };
+    let toastAutoTimer = null;
+
+    // showToast(message, opts?)
+    // opts.variant: "success" (default) | "pending" | "error"
+    // opts.persistent: if true, stays until dismissed or replaced
+    // opts.detail: error detail string (shown as clickable link)
+    function showToast(message, opts) {
+      opts = opts || {};
       const toast = document.getElementById("toast");
+      const toastIcon = document.getElementById("toast-icon");
+      const toastDetail = document.getElementById("toast-detail");
       document.getElementById("toast-text").textContent = message;
+
+      // Icon
+      const variant = opts.variant || "success";
+      toastIcon.innerHTML = TOAST_ICONS[variant] || TOAST_ICONS.success;
+
+      // Variant classes
+      toast.classList.remove("toast-pending", "toast-error");
+      if (variant === "pending") toast.classList.add("toast-pending");
+      if (variant === "error") toast.classList.add("toast-error");
+
+      // Detail link (for errors)
+      if (opts.detail) {
+        toastDetail.textContent = "Show details";
+        toastDetail.title = opts.detail;
+        toastDetail.style.display = "inline";
+        toastDetail.onclick = () => {
+          alert("Action Error Details:\\n\\n" + opts.detail);
+        };
+      } else {
+        toastDetail.style.display = "none";
+      }
+
+      // Show
       toast.classList.add("show");
-      setTimeout(() => toast.classList.remove("show"), 3000);
+      clearTimeout(toastAutoTimer);
+      if (!opts.persistent) {
+        toastAutoTimer = setTimeout(() => toast.classList.remove("show"), 3000);
+      }
     }
+
+    // Dismiss button
+    document.getElementById("toast-dismiss").addEventListener("click", () => {
+      clearTimeout(toastAutoTimer);
+      document.getElementById("toast").classList.remove("show");
+    });
 
     // Show toast on load if it's the demo
     if (isDemo) {

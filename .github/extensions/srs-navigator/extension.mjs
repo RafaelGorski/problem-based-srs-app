@@ -409,23 +409,56 @@ const session = await joinSession({
                     if (req.url === "/api/invoke-skill" && req.method === "POST") {
                         let body = "";
                         req.on("data", (chunk) => { body += chunk; });
-                        req.on("end", () => {
+                        req.on("end", async () => {
                             try {
                                 const action = JSON.parse(body);
-                                // Queue the action for agent consumption
+                                const actionId = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+
+                                // Read the skill file for context
+                                let skillContent = "";
+                                try {
+                                    const skillDef = SKILLS.find(s => s.name === action.skill);
+                                    if (skillDef) {
+                                        skillContent = await readFile(resolve(skillsDir, skillDef.file), "utf-8");
+                                    }
+                                } catch { /* non-fatal */ }
+
+                                // Build the prompt for the agent
+                                const prompt = [
+                                    `## SRS Navigator Action: ${action.action}`,
+                                    `**Skill:** ${action.skill}`,
+                                    `**Node:** ${action.nodeId} (${action.nodeType}) — "${action.nodeLabel}"`,
+                                    `**Context:** ${action.context}`,
+                                    "",
+                                    "Use the `" + action.skill + "` tool with the context above to process this request.",
+                                    "After generating the result, use the `load_specification` canvas action to update the graph if the specification changes.",
+                                ].join("\n");
+
+                                // Send directly to the agent session
+                                await session.send({ prompt });
+
+                                // Also queue for reference
                                 if (!pendingActions.has(ctx.instanceId)) {
                                     pendingActions.set(ctx.instanceId, []);
                                 }
                                 pendingActions.get(ctx.instanceId).push({
-                                    id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+                                    id: actionId,
                                     timestamp: new Date().toISOString(),
+                                    status: "sent",
                                     ...action,
                                 });
+
                                 res.setHeader("Content-Type", "application/json");
-                                res.end(JSON.stringify({ ok: true, queued: true }));
+                                res.end(JSON.stringify({ ok: true, sent: true, actionId }));
                             } catch (e) {
-                                res.statusCode = 400;
-                                res.end(JSON.stringify({ error: "Invalid JSON" }));
+                                const isJsonError = e instanceof SyntaxError;
+                                res.statusCode = isJsonError ? 400 : 500;
+                                res.setHeader("Content-Type", "application/json");
+                                res.end(JSON.stringify({
+                                    ok: false,
+                                    error: isJsonError ? "Invalid JSON" : "Failed to send to agent",
+                                    detail: e.message,
+                                }));
                             }
                         });
                         return;
