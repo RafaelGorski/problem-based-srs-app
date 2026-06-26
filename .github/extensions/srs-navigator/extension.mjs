@@ -1,6 +1,7 @@
 // Extension: srs-navigator
 // Problem-Based SRS Navigator - Interactive graph visualization for software
 // requirements specifications structured using the Problem-Based SRS methodology.
+// Also provides Problem-Based SRS methodology skills as tools.
 
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
@@ -12,6 +13,85 @@ import { parseSpecificationData, buildGraphData, convertJSONToSpecificationData 
 import { validateSpecificationJSON, validateReferenceIntegrity } from "./lib/validation.mjs";
 import { renderGraphHtml } from "./lib/renderer.mjs";
 import { DEMO_SPEC } from "./lib/demo-spec.mjs";
+
+// Skills directory path
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const skillsDir = resolve(__dirname, "skills");
+
+// Skill definitions for tool registration
+const SKILLS = [
+    {
+        name: "business_context",
+        file: "business-context.md",
+        description: "Step 0: Establish structured business context and project principles before problem discovery. Use when starting requirements engineering to capture project identity, business principles, stakeholders, domain boundaries, and success criteria.",
+    },
+    {
+        name: "customer_problems",
+        file: "customer-problems.md",
+        description: "Step 1: Identify and document Customer Problems (CP) from business context. Use when stakeholders describe solutions instead of problems, or when starting requirements engineering.",
+    },
+    {
+        name: "software_glance",
+        file: "software-glance.md",
+        description: "Step 2: Create the first abstract representation of a software solution from Customer Problems. Use after identifying CPs to design high-level system boundaries and components.",
+    },
+    {
+        name: "customer_needs",
+        file: "customer-needs.md",
+        description: "Step 3: Specify Customer Needs (CN) that define WHAT outcomes software must provide to solve Customer Problems. Use after Software Glance to translate problems into needs.",
+    },
+    {
+        name: "software_vision",
+        file: "software-vision.md",
+        description: "Step 4: Transform Software Glance and Customer Needs into a detailed Software Vision with positioning, stakeholders, features, and architecture.",
+    },
+    {
+        name: "functional_requirements",
+        file: "functional-requirements.md",
+        description: "Step 5: Generate Functional Requirements (FR) and Non-Functional Requirements (NFR) from Customer Needs and Software Vision. Creates individual requirement files with traceability.",
+    },
+    {
+        name: "complexity_analysis",
+        file: "complexity-analysis.md",
+        description: "Optional: Analyze specification quality using Axiomatic Design principles. Evaluates independence, completeness, and information content of requirements.",
+    },
+    {
+        name: "problem_based_srs",
+        file: "problem-based-srs.md",
+        description: "Complete Problem-Based SRS methodology orchestrator. Use when you need to perform full requirements engineering from business problems to functional requirements with traceability.",
+    },
+    {
+        name: "zigzag_validator",
+        file: "zigzag-validator.md",
+        description: "Validate traceability and consistency across Customer Problems, Customer Needs, and Functional Requirements domains. Use to check completeness and identify gaps.",
+    },
+];
+
+// Build tools array from skill definitions
+function buildSkillTools() {
+    return SKILLS.map((skill) => ({
+        name: skill.name,
+        description: skill.description,
+        parameters: {
+            type: "object",
+            properties: {
+                context: {
+                    type: "string",
+                    description: "Optional: existing artifacts or business context to provide as input for this methodology step.",
+                },
+            },
+        },
+        handler: async (args) => {
+            const skillPath = resolve(skillsDir, skill.file);
+            const content = await readFile(skillPath, "utf-8");
+            let result = content;
+            if (args.context) {
+                result += `\n\n---\n\n## User-Provided Context\n\n${args.context}`;
+            }
+            return result;
+        },
+    }));
+}
 
 // Per-instance state: server + loaded graph data
 const instances = new Map();
@@ -53,6 +133,7 @@ function loadAndBuildGraph(specJSON) {
 }
 
 const session = await joinSession({
+    tools: buildSkillTools(),
     canvases: [
         createCanvas({
             id: "srs-navigator",
