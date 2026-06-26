@@ -611,6 +611,21 @@ export function renderGraphHtml(graphData, options = {}) {
       font-size: 12px;
     }
 
+    /* Hot-spot insight callout in detail panel */
+    .hotspot-insight {
+      margin: var(--space-md) 0;
+      padding: var(--space-sm) var(--space-md);
+      border-radius: 6px;
+      background: oklch(0.97 0.01 50);
+      border: 1px solid oklch(0.90 0.03 50);
+      font-size: 12px;
+      line-height: 1.5;
+      display: flex;
+      align-items: flex-start;
+      gap: var(--space-sm);
+    }
+    .hotspot-insight-icon { flex-shrink: 0; font-size: 14px; line-height: 1.3; }
+
     /* Demo indicator badge */
     .demo-badge {
       display: inline-flex;
@@ -1253,7 +1268,7 @@ export function renderGraphHtml(graphData, options = {}) {
         };
         const insight = insights[node._hotspot];
         if (insight) {
-          html += '<div style="margin:var(--space-md) 0;padding:var(--space-sm) var(--space-md);border-radius:6px;background:oklch(0.97 0.01 50);border:1px solid oklch(0.90 0.03 50);font-size:12px;line-height:1.5;color:' + insight.color + '">' + insight.icon + ' ' + insight.text + '</div>';
+          html += '<div class="hotspot-insight" style="color:' + insight.color + '"><span class="hotspot-insight-icon">' + insight.icon + '</span><span>' + insight.text + '</span></div>';
         }
       }
 
