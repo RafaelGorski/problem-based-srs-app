@@ -2452,6 +2452,30 @@ export function renderLandingHtml() {
         if (!data.ok) setLoading(btnLoad, false);
       } catch { setLoading(btnLoad, false); }
     });
+
+    // Poll for spec appearance after learn/load actions are triggered
+    let polling = false;
+    let pollInterval = null;
+
+    function startPolling() {
+      if (polling) return;
+      polling = true;
+      pollInterval = setInterval(async () => {
+        try {
+          const res = await fetch('/api/check-spec');
+          const data = await res.json();
+          if (data.found) {
+            clearInterval(pollInterval);
+            polling = false;
+            window.location.reload();
+          }
+        } catch { /* continue polling */ }
+      }, 3000);
+    }
+
+    // Start polling after learn or load actions
+    btnLearn.addEventListener('click', () => { setTimeout(startPolling, 2000); });
+    btnLoad.addEventListener('click', () => { setTimeout(startPolling, 2000); });
   <\/script>
 </body>
 </html>`;

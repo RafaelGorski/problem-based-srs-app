@@ -14,6 +14,7 @@ import { validateSpecificationJSON, validateReferenceIntegrity } from "./lib/val
 import { renderGraphHtml, renderLandingHtml } from "./lib/renderer.mjs";
 import { DEMO_SPEC } from "./lib/demo-spec.mjs";
 import { backgroundSync } from "./lib/skills-sync.mjs";
+import { compileAndSave, compileSpecFromFolder } from "./lib/spec-compiler.mjs";
 
 // Skills directory path
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -138,6 +139,7 @@ function loadAndBuildGraph(specJSON) {
 
 /**
  * Scan for .spec folder in the workspace and load the first valid JSON spec found.
+ * If no JSON exists but markdown artifacts do, compile them into JSON first.
  * Returns { graphData, specName, filePath } or null if no .spec folder or valid spec.
  */
 async function loadFromSpecFolder(workspacePath) {
@@ -146,6 +148,8 @@ async function loadFromSpecFolder(workspacePath) {
     try {
         const files = await readdir(specDir);
         const jsonFiles = files.filter(f => f.endsWith(".json")).sort();
+
+        // Try existing JSON files first
         for (const file of jsonFiles) {
             try {
                 const filePath = join(specDir, file);
@@ -156,6 +160,15 @@ async function loadFromSpecFolder(workspacePath) {
             } catch {
                 // Skip invalid files, try next
             }
+        }
+
+        // No valid JSON found — try compiling from markdown artifacts
+        const compiledPath = await compileAndSave(specDir);
+        if (compiledPath) {
+            const content = await readFile(compiledPath, "utf-8");
+            const json = JSON.parse(content);
+            const result = loadAndBuildGraph(json);
+            return { ...result, filePath: compiledPath };
         }
     } catch {
         // .spec folder doesn't exist or can't be read
@@ -425,6 +438,51 @@ const session = await joinSession({
                             message: "Learn action triggered. Run the problem_based_srs methodology and load the result into the canvas."
                         };
                     }
+                },
+                {
+                    name: "compile_spec",
+                    description: "Compile .spec/ markdown artifacts into a JSON specification file and load the result into the graph. Use after the problem_based_srs methodology has generated markdown files but no JSON exists yet.",
+                    inputSchema: {
+                        type: "object",
+                        properties: {
+                            specDir: {
+                                type: "string",
+                                description: "Optional path to the .spec directory. Defaults to .spec/ in the workspace root."
+                            }
+                        }
+                    },
+                    handler: async (ctx) => {
+                        const entry = instances.get(ctx.instanceId);
+                        if (!entry) throw new CanvasError("not_open", "Canvas instance not found");
+
+                        const workspacePath = session.workspacePath || "";
+                        const specDir = ctx.input?.specDir || join(workspacePath, ".spec");
+
+                        const filePath = await compileAndSave(specDir);
+                        if (!filePath) {
+                            throw new CanvasError("compile_failed", "Could not compile specification from .spec/ folder. Ensure at least customer problems (01-customer-problems.md) or customer needs (03-customer-needs.md) exist.");
+                        }
+
+                        // Load the compiled JSON into the graph
+                        const content = await readFile(filePath, "utf-8");
+                        const json = JSON.parse(content);
+                        const result = loadAndBuildGraph(json);
+
+                        const html = renderGraphHtml(result.graphData, { title: result.specName, isDemo: false });
+                        entry.graphData = result.graphData;
+                        entry.specName = result.specName;
+                        entry.html = html;
+                        entry.isLanding = false;
+
+                        return {
+                            specName: result.specName,
+                            filePath,
+                            nodeCount: result.graphData.nodes.length,
+                            linkCount: result.graphData.links.length,
+                            summary: summarizeGraph(result.graphData),
+                            message: `Compiled and loaded specification from ${filePath}`
+                        };
+                    }
                 }
             ],
             open: async (ctx) => {
@@ -457,9 +515,36 @@ const session = await joinSession({
                     } else {
                         // No spec found — show landing page
                         const landingHtml = renderLandingHtml();
+                        const workspacePathResolved = session.workspacePath || ctx.host?.workspacePath;
 
                         const server = createServer((req, res) => {
                             const inst = instances.get(ctx.instanceId);
+
+                            if (req.url === "/api/check-spec" && req.method === "GET") {
+                                // Polling endpoint: check if a spec has appeared in .spec/
+                                (async () => {
+                                    try {
+                                        const result = await loadFromSpecFolder(workspacePathResolved);
+                                        if (result) {
+                                            // Spec found — switch to graph view
+                                            const html = renderGraphHtml(result.graphData, { title: result.specName, isDemo: false });
+                                            inst.graphData = result.graphData;
+                                            inst.specName = result.specName;
+                                            inst.html = html;
+                                            inst.isLanding = false;
+                                            res.setHeader("Content-Type", "application/json");
+                                            res.end(JSON.stringify({ found: true, specName: result.specName }));
+                                        } else {
+                                            res.setHeader("Content-Type", "application/json");
+                                            res.end(JSON.stringify({ found: false }));
+                                        }
+                                    } catch {
+                                        res.setHeader("Content-Type", "application/json");
+                                        res.end(JSON.stringify({ found: false }));
+                                    }
+                                })();
+                                return;
+                            }
 
                             if (req.url === "/api/landing-action" && req.method === "POST") {
                                 let body = "";
@@ -486,7 +571,23 @@ const session = await joinSession({
                                                 "The user wants to create a Problem-Based SRS specification for their project.",
                                                 "Use the `problem_based_srs` tool to run the full methodology.",
                                                 "Scan the workspace for existing code, README, and documentation to provide context.",
-                                                "After generating the specification, use the `load_specification` canvas action to display it in the navigator.",
+                                                "",
+                                                "**IMPORTANT:** After generating all the .spec/ markdown artifacts (customer problems, needs, requirements),",
+                                                "you MUST also generate a consolidated JSON specification file at `.spec/<project-name>.json`",
+                                                "following this structure:",
+                                                "```json",
+                                                '{',
+                                                '  "name": "Project Name",',
+                                                '  "version": "1.0",',
+                                                '  "problems": [{ "id": "CP-1", "title": "...", "description": "..." }],',
+                                                '  "needs": [{ "id": "CN-1", "title": "...", "description": "...", "problemIds": ["CP-1"] }],',
+                                                '  "functionalRequirements": [{ "id": "FR-1", "title": "...", "description": "...", "needIds": ["CN-1"] }],',
+                                                '  "nonFunctionalRequirements": [{ "id": "NFR-1", "title": "...", "description": "...", "needIds": ["CN-1"] }]',
+                                                '}',
+                                                "```",
+                                                "",
+                                                "The SRS Navigator canvas will auto-detect the JSON file and display the graph.",
+                                                "Alternatively, use the `load_specification` canvas action to load it immediately.",
                                             ].join("\n");
                                             await session.send({ prompt });
                                             res.setHeader("Content-Type", "application/json");
