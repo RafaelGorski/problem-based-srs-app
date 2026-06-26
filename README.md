@@ -204,6 +204,19 @@ Here's my existing spec: [paste or file path]
 
 Each tool returns the full methodology instructions, enabling the agent to follow the structured process (notation, classification, validation checklists) while generating your artifacts.
 
+### Skills Auto-Sync
+
+The extension automatically keeps its methodology skills up to date with the [Problem-Based-SRS](https://github.com/RafaelGorski/Problem-Based-SRS) source repository. On extension startup (and each time the canvas opens), a background check runs:
+
+1. Queries the GitHub API for the latest commit on the `skills/` directory
+2. Compares with the locally stored commit SHA
+3. If newer, downloads all updated SKILL.md files
+4. Throttled to at most once per hour to avoid rate limits
+
+This happens silently in the background — no user action needed. If the network is unavailable, the extension continues using the bundled versions without error.
+
+Sync state is stored in `.github/extensions/srs-navigator/skills/.sync-state.json` (gitignored).
+
 ## Development
 
 ### Run tests
