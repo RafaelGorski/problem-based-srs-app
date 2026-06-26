@@ -728,13 +728,21 @@ const session = await joinSession({
                                     try {
                                         const result = workspacePathResolved ? await loadFromSpecFolder(workspacePathResolved) : null;
                                         if (result && inst) {
-                                            const html = renderGraphHtml(result.graphData, { title: result.specName, isDemo: false });
-                                            inst.graphData = result.graphData;
-                                            inst.specName = result.specName;
-                                            inst.html = html;
-                                            inst.isLanding = false;
+                                            // Detect if spec actually changed
+                                            const oldNodes = inst.graphData?.nodes?.length || 0;
+                                            const oldLinks = inst.graphData?.links?.length || 0;
+                                            const newNodes = result.graphData.nodes.length;
+                                            const newLinks = result.graphData.links.length;
+                                            const changed = inst.isLanding || oldNodes !== newNodes || oldLinks !== newLinks || inst.specName !== result.specName;
+                                            if (changed) {
+                                                const html = renderGraphHtml(result.graphData, { title: result.specName, isDemo: false });
+                                                inst.graphData = result.graphData;
+                                                inst.specName = result.specName;
+                                                inst.html = html;
+                                                inst.isLanding = false;
+                                            }
                                             res.setHeader("Content-Type", "application/json");
-                                            res.end(JSON.stringify({ refreshed: true, specName: result.specName }));
+                                            res.end(JSON.stringify({ refreshed: changed, specName: result.specName, nodeCount: newNodes, linkCount: newLinks }));
                                         } else {
                                             res.setHeader("Content-Type", "application/json");
                                             res.end(JSON.stringify({ refreshed: false }));
@@ -854,13 +862,20 @@ const session = await joinSession({
                                 const wp = derivedWorkspacePath || process.env.COPILOT_WORKSPACE_PATH || "";
                                 const result = wp ? await loadFromSpecFolder(wp) : null;
                                 if (result && inst) {
-                                    const newHtml = renderGraphHtml(result.graphData, { title: result.specName, isDemo: false });
-                                    inst.graphData = result.graphData;
-                                    inst.specName = result.specName;
-                                    inst.html = newHtml;
-                                    inst.isLanding = false;
+                                    const oldNodes = inst.graphData?.nodes?.length || 0;
+                                    const oldLinks = inst.graphData?.links?.length || 0;
+                                    const newNodes = result.graphData.nodes.length;
+                                    const newLinks = result.graphData.links.length;
+                                    const changed = oldNodes !== newNodes || oldLinks !== newLinks || inst.specName !== result.specName;
+                                    if (changed) {
+                                        const newHtml = renderGraphHtml(result.graphData, { title: result.specName, isDemo: false });
+                                        inst.graphData = result.graphData;
+                                        inst.specName = result.specName;
+                                        inst.html = newHtml;
+                                        inst.isLanding = false;
+                                    }
                                     res.setHeader("Content-Type", "application/json");
-                                    res.end(JSON.stringify({ refreshed: true, specName: result.specName }));
+                                    res.end(JSON.stringify({ refreshed: changed, specName: result.specName, nodeCount: newNodes, linkCount: newLinks }));
                                 } else {
                                     res.setHeader("Content-Type", "application/json");
                                     res.end(JSON.stringify({ refreshed: false }));
