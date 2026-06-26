@@ -980,6 +980,7 @@ export function renderGraphHtml(graphData, options = {}) {
     }
 
     .landing-panel {
+      position: relative;
       max-width: 480px;
       width: calc(100% - 48px);
       padding: 32px 28px;
@@ -991,6 +992,29 @@ export function renderGraphHtml(graphData, options = {}) {
       border: 1px solid oklch(0.87 0.01 240 / 0.6);
       border-radius: 12px;
       box-shadow: 0 16px 48px oklch(0 0 0 / 0.10), 0 0 0 1px oklch(0 0 0 / 0.03);
+    }
+
+    .landing-close-btn {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      width: 28px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: none;
+      background: transparent;
+      color: oklch(0.55 0.01 265);
+      font-size: 20px;
+      line-height: 1;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 150ms ease-out, color 150ms ease-out;
+    }
+    .landing-close-btn:hover {
+      background: oklch(0.92 0.01 265);
+      color: oklch(0.30 0.02 265);
     }
 
     .landing-panel-header {
@@ -2277,6 +2301,7 @@ export function renderGraphHtml(graphData, options = {}) {
 ${showLanding ? `
   <div class="landing-overlay" id="landing-overlay" role="dialog" aria-modal="true" aria-label="Get started with SRS Navigator">
     <div class="landing-panel">
+      <button class="landing-close-btn" id="landing-btn-close" aria-label="Close" title="Close">&times;</button>
       <div class="landing-panel-header">
         <div class="landing-panel-icon" aria-hidden="true">
           <svg viewBox="0 0 256 256" fill="currentColor"><path d="M208,32H48A16,16,0,0,0,32,48V208a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V48A16,16,0,0,0,208,32ZM172.27,96,128,154.16,83.73,96ZM48,48H208V80.24L136.62,170.06a12,12,0,0,1-17.24,0L48,80.24Zm0,160V105.76l60,73.5a28,28,0,0,0,40,0l60-73.5V208Z"/></svg>
@@ -2331,6 +2356,7 @@ ${showLanding ? `
     const btnLearn = document.getElementById('landing-btn-learn');
     const btnDemo = document.getElementById('landing-btn-demo');
     const btnLoad = document.getElementById('landing-btn-load');
+    const btnClose = document.getElementById('landing-btn-close');
 
     function setLoading(btn, loading) {
       btn.classList.toggle('loading', loading);
@@ -2341,6 +2367,10 @@ ${showLanding ? `
       overlay.classList.add('dismissing');
       setTimeout(() => overlay.remove(), 300);
     }
+
+    btnClose.addEventListener('click', () => {
+      dismissOverlay();
+    });
 
     btnDemo.addEventListener('click', () => {
       dismissOverlay();
@@ -2389,6 +2419,9 @@ ${showLanding ? `
         } catch {}
       }, 3000);
     }
+
+    // Start polling immediately — if the agent loads a spec via action, we detect it
+    startPolling();
   })();
   <\/script>
 ` : ''}
