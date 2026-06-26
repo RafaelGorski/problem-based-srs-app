@@ -699,6 +699,9 @@ export function renderGraphHtml(graphData, options = {}) {
       opacity: 1;
       transform: translateY(0);
     }
+    .action-bar.pinned {
+      box-shadow: 0 0 0 1px oklch(0.45 0.12 265 / 0.6), 0 4px 16px oklch(0 0 0 / 0.4);
+    }
     .action-bar-input {
       flex: 1;
       min-width: 140px;
@@ -1064,7 +1067,11 @@ export function renderGraphHtml(graphData, options = {}) {
       selectedNode = null;
       hideDetail();
       updateVisibility();
-      hideActionBar();
+      // Only dismiss action bar on background click if no text is being composed
+      if (actionBarInput.value.length === 0) {
+        actionBarLocked = false;
+        hideActionBar();
+      }
     });
 
     // === Action Bar (hover micro-toolbar) ===
@@ -1185,6 +1192,8 @@ export function renderGraphHtml(graphData, options = {}) {
 
     function hideActionBar() {
       if (actionBarLocked) return;
+      // Never hide while user has typed content — prevents losing their work
+      if (actionBarInput.value.length > 0) return;
       actionBar.classList.remove("visible");
       setTimeout(() => {
         if (!actionBar.classList.contains("visible")) actionBar.style.display = "none";
@@ -1245,7 +1254,9 @@ export function renderGraphHtml(graphData, options = {}) {
         showToast("⚠ Connection error");
       });
 
+      actionBarInput.value = "";
       actionBarLocked = false;
+      actionBar.classList.remove("pinned");
       hideActionBar();
     }
 
@@ -1265,6 +1276,8 @@ export function renderGraphHtml(graphData, options = {}) {
       actionBarLocked = true;
     });
     actionBar.addEventListener("mouseleave", () => {
+      // Stay locked if user has typed content — they're thinking
+      if (actionBarInput.value.length > 0) return;
       actionBarLocked = false;
       actionBarHideTimer = setTimeout(hideActionBar, 300);
     });
@@ -1277,10 +1290,16 @@ export function renderGraphHtml(graphData, options = {}) {
       }
       if (e.key === "Escape") {
         e.preventDefault();
+        actionBarInput.value = "";
+        actionBar.classList.remove("pinned");
         actionBarLocked = false;
         hideActionBar();
       }
       e.stopPropagation();
+    });
+    actionBarInput.addEventListener("input", () => {
+      // Toggle pinned state based on content presence
+      actionBar.classList.toggle("pinned", actionBarInput.value.length > 0);
     });
     actionBarInput.addEventListener("click", (e) => e.stopPropagation());
 

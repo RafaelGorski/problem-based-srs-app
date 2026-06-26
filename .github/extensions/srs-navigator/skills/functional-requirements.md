@@ -1,3 +1,4 @@
+<!-- Built from SKILL.src.md for provider: github-copilot. Do not edit directly. -->
 ---
 name: functional-requirements
 description: Generate Functional Requirements (FR) and Non-Functional Requirements (NFR) from Customer Needs and Software Vision. Creates individual requirement files with traceability. Step 5 of Problem-Based SRS methodology.
@@ -56,6 +57,41 @@ For each CN:
 3. Save each FR/NFR as an individual file (see File Output section)
 4. Create index files (_index.md) for both folders
 5. **Present ALL FR statements in your response** (see Response Format immediately below)
+
+### Discovery Interview (Mandatory)
+
+**STOP. Do NOT generate requirements during this phase.** Your only job is to confirm scope, detail level, and constraints before specifying requirements.
+
+This is a required interaction. STOP and ask the user to clarify what you cannot infer. Use the ask_user tool if available; otherwise ask directly in chat and wait for an answer.
+
+#### Interview Cadence
+
+- Ask **2-3 questions per round**, then STOP and wait for answers.
+- Treat the Customer Needs and Software Vision as anchors.
+- One round is the default.
+- **Assert-then-confirm, not menu-with-escape.** When a CN clearly implies certain functional capabilities, state them and ask to confirm.
+
+#### What to Ask (adapt to context)
+
+**Round 1 — Scope and Detail:**
+- Should we specify requirements for ALL Customer Needs, or focus on a specific subset? (e.g., "Start with CN-001 through CN-003 for the MVP")
+- What level of detail is needed? (Full acceptance criteria per FR, or high-level "shall" statements first?)
+- Are there known technical constraints that should shape the requirements? (e.g., "must work offline", "must support REST APIs")
+
+**Round 2 (only if gaps remain):**
+- Are there specific quality attributes (NFRs) that are particularly important? (performance, security, etc.)
+- What priority framework should we use? (MoSCoW, or simple High/Medium/Low?)
+
+#### Skip Conditions
+
+Skip the interview when ALL of these are true:
+- The Software Vision has clear scope boundaries and feature priorities
+- The user's prompt specifies which CNs to address and at what detail level
+- Technical constraints are fully documented in the Business Context
+
+When skipping, state in one line what you're using as the basis and proceed.
+
+---
 
 ---
 

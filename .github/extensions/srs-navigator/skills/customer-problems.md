@@ -1,3 +1,4 @@
+<!-- Built from SKILL.src.md for provider: github-copilot. Do not edit directly. -->
 ---
 name: customer-problems
 description: Identify and document Customer Problems (CP) from business context. Use when starting requirements engineering or when stakeholders describe solutions instead of problems. Step 1 of Problem-Based SRS methodology.
@@ -50,6 +51,42 @@ Use when you have **draft CP statements** that need quality review and formattin
 
 ## Mode 1: CP Generation
 
+### Discovery Interview (Mandatory)
+
+**STOP. Do NOT generate Customer Problem statements during this phase.** Your only job is to understand the problem space deeply enough to produce accurate, well-classified CPs.
+
+This is a required interaction, not optional guidance. Ask questions in conversation, adapting based on answers. Do not dump all questions at once; have a natural dialogue. STOP and ask the user to clarify what you cannot infer. Use the ask_user tool if available; otherwise ask directly in chat and wait for an answer.
+
+#### Interview Cadence
+
+- Ask **2-3 questions per round**, then STOP and wait for answers.
+- Treat the Business Context document (.spec/00-business-context.md) as an anchor — it reduces questions but does not eliminate this phase.
+- One round is the default. Add a second only if answers leave material gaps.
+- **Assert-then-confirm, not menu-with-escape.** When the Business Context makes problem severity obvious, state your assessment and ask to confirm or override.
+
+#### What to Ask (adapt to context)
+
+**Round 1 — Problem Scope and Severity:**
+- Which problems are the most urgent/costly? (Helps classify Obligation vs Expectation vs Hope)
+- Who specifically suffers from these problems? (Identifies the Subject for CP notation)
+- What are the concrete consequences if nothing changes? (Identifies Penalties)
+
+**Round 2 (only if gaps remain) — Completeness:**
+- Are there compliance/legal obligations not yet mentioned?
+- Are there problems that users experience but haven't articulated?
+- Which stakeholder group's problems should we prioritize first?
+
+#### Skip Conditions
+
+Skip the interview and proceed directly when ALL of these are true:
+- A complete Business Context exists with clear pain points and stakeholder information
+- The user's prompt explicitly states the problems and their severity
+- No ambiguity exists about who suffers and what the consequences are
+
+When skipping, state in one line what you're using as the basis and proceed.
+
+---
+
 ### Your Task
 Analyze the provided business context and generate Customer Problem statements.
 
@@ -91,7 +128,7 @@ For each draft problem:
 1. **Normalize** into the CP syntax: `[Subject] [Verb] [Object] [Penalty]`
 2. **Classify** as **Obligation**, **Expectation**, or **Hope**
 3. **Flag missing elements** (subject, object, penalty, or severity verb)
-4. **Ask clarifying questions** only when required data is missing
+4. **If required data is missing,** STOP and ask the user to clarify what you cannot infer. Use the ask_user tool if available; otherwise ask directly in chat and wait for an answer.
 
 ---
 

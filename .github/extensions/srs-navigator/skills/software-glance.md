@@ -1,3 +1,4 @@
+<!-- Built from SKILL.src.md for provider: github-copilot. Do not edit directly. -->
 ---
 name: software-glance
 description: Create the first abstract representation of a software solution from Customer Problems. Use after identifying CPs to design high-level system boundaries and components. Step 2 of Problem-Based SRS methodology.
@@ -71,6 +72,41 @@ Problems expressed using this notation: `[Noun] [Verb] [Object] [Penalty]`
 ## Task (Single Responsibility)
 
 **Synthesize a Software Glance** by analyzing Customer Problems and producing an abstract solution view.
+
+### Discovery Interview (Mandatory)
+
+**STOP. Do NOT generate the Software Glance during this phase.** Your only job is to understand the solution space well enough to design accurate system boundaries.
+
+This is a required interaction. STOP and ask the user to clarify what you cannot infer. Use the ask_user tool if available; otherwise ask directly in chat and wait for an answer.
+
+#### Interview Cadence
+
+- Ask **2-3 questions per round**, then STOP and wait for answers.
+- Treat the Business Context and Customer Problems documents as anchors.
+- One round is the default. Add a second only if answers leave material gaps.
+- **Assert-then-confirm, not menu-with-escape.** When the CPs clearly imply certain actors or integrations, state your inference and ask to confirm.
+
+#### What to Ask (adapt to context)
+
+**Round 1 — Solution Boundaries:**
+- What existing systems must this solution integrate with? (Identifies external systems)
+- Who are the different user roles that will interact with the system? (Identifies actors)
+- Is this a web application, mobile app, desktop tool, embedded system, or something else? (Identifies interfaces)
+
+**Round 2 (only if gaps remain):**
+- Are there any technology constraints already decided? (Helps scope the glance)
+- Should this replace or complement existing systems?
+
+#### Skip Conditions
+
+Skip the interview when ALL of these are true:
+- The Business Context includes clear "Existing Systems" and "Stakeholders" sections
+- CPs explicitly mention the actors and their interactions
+- The user's prompt specifies the system type and key integrations
+
+When skipping, state in one line what you're using as the basis and proceed.
+
+---
 
 ### Reasoning Steps
 

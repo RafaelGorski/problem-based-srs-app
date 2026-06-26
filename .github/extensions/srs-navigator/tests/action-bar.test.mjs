@@ -93,6 +93,24 @@ describe("Action Bar: Renderer output", () => {
     assert.ok(html.includes('actionBar.addEventListener("mouseleave"'));
   });
 
+  it("prevents hiding when input has text content (text-pin guard)", () => {
+    // hideActionBar checks input value length
+    assert.ok(html.includes("actionBarInput.value.length > 0"));
+    // pinned class toggled on input event
+    assert.ok(html.includes('"pinned"'));
+    assert.ok(html.includes('actionBarInput.addEventListener("input"'));
+  });
+
+  it("includes pinned CSS state for visual indicator", () => {
+    assert.ok(html.includes(".action-bar.pinned"));
+    assert.ok(html.includes("box-shadow"));
+  });
+
+  it("Escape clears input and dismisses bar", () => {
+    assert.ok(html.includes('actionBarInput.value = ""'));
+    assert.ok(html.includes('actionBar.classList.remove("pinned")'));
+  });
+
   it("includes reduced-motion media query for action bar", () => {
     assert.ok(html.includes("prefers-reduced-motion"));
   });

@@ -1,3 +1,4 @@
+<!-- Built from SKILL.src.md for provider: github-copilot. Do not edit directly. -->
 ---
 name: customer-needs
 description: Specify Customer Needs (CN) that define WHAT outcomes software must provide to solve Customer Problems. Use after Software Glance to translate problems into needs. Step 3 of Problem-Based SRS methodology.
@@ -34,6 +35,37 @@ Customer Needs describe the outcomes a software system must deliver to solve (or
 ## Your Task
 
 For each CP, generate CN statements that map directly to solving that problem.
+
+### Discovery Interview (Mandatory)
+
+**STOP. Do NOT generate Customer Need statements during this phase.** Your only job is to confirm the scope and priorities before specifying outcomes.
+
+This is a required interaction. STOP and ask the user to clarify what you cannot infer. Use the ask_user tool if available; otherwise ask directly in chat and wait for an answer.
+
+#### Interview Cadence
+
+- Ask **2-3 questions per round**, then STOP and wait for answers.
+- Treat the Customer Problems and Software Glance as anchors.
+- One round is the default.
+- **Assert-then-confirm, not menu-with-escape.** When a CP clearly implies an Information or Control outcome, state your assessment and ask to confirm.
+
+#### What to Ask (adapt to context)
+
+**Round 1 — Scope and Priorities:**
+- Which CPs are the highest priority to address first? (Focus the CN generation)
+- For each key CP: does the user primarily need Information (awareness), Control (management), Construction (creation), or Entertainment? (Confirms outcome class)
+- Are there specific conditions or constraints on how outcomes should be delivered? (e.g., "monthly", "real-time", "within 2 seconds")
+
+#### Skip Conditions
+
+Skip the interview when ALL of these are true:
+- CPs are clearly classified with severity (Obligation/Expectation/Hope indicating priority)
+- The Software Glance already defines system boundaries narrowing outcome options
+- The user's prompt specifies which CPs to focus on
+
+When skipping, state in one line what you're using as the basis and proceed.
+
+---
 
 ## Structured Notation
 

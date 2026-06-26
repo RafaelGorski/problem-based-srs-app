@@ -1,3 +1,4 @@
+<!-- Built from SKILL.src.md for provider: github-copilot. Do not edit directly. -->
 ---
 name: business-context
 description: Establish structured business context and project principles before problem discovery. Use as Step 0 of Problem-Based SRS to capture project identity, business principles, stakeholders, domain boundaries, and success criteria that feed into Customer Problems identification.
@@ -54,12 +55,48 @@ Collect and structure the foundational business context for a project.
 - **Project brief or description:** Any available context about the project
 - **Stakeholder access:** Ability to ask clarifying questions
 
-### Discovery Process
+### Discovery Interview (Mandatory)
+
+**STOP. Do NOT generate the Business Context document during this phase.** Your only job is to understand the project deeply enough to produce an accurate context.
+
+This is a required interaction, not optional guidance. Ask questions in conversation, adapting based on answers. Do not dump all questions at once; have a natural dialogue. STOP and ask the user to clarify what you cannot infer. Use the ask_user tool if available; otherwise ask directly in chat and wait for an answer.
+
+#### Interview Cadence
+
+- Ask **2-3 questions per round**, then STOP and wait for answers.
+- Treat existing documentation (README, project briefs, proposals) as anchors — they reduce questions but do not eliminate this phase.
+- One round is the default. Add a second only if answers leave material gaps.
+- **Assert-then-confirm, not menu-with-escape.** When existing docs make one option obvious, state it and ask the user to confirm or override.
+
+#### What to Ask (adapt to context)
+
+**Round 1 — Identity and Domain:**
+- What is the project's purpose? What specific problem does it address?
+- Who are the primary stakeholders? (Not "users" — be specific: roles, context)
+- What domain or industry does this operate in?
+
+**Round 2 (only if gaps remain) — Boundaries and Constraints:**
+- What is explicitly out of scope?
+- Are there known technical, regulatory, or organizational constraints?
+- How will success be measured?
+
+#### Skip Conditions
+
+Skip the interview and proceed directly when ALL of these are true:
+- The user provided comprehensive project documentation (README, briefs, proposals)
+- The prompt is unambiguous about project identity, domain, and stakeholders
+- No material gaps exist in the available context
+
+When skipping, state in one line what you're using as the basis and proceed.
+
+---
+
+### Generation Process
 
 Work through the following sections systematically. For each section, either:
-- Use information provided by stakeholders
+- Use information gathered during the interview
 - Infer from existing documentation (README, briefs, proposals)
-- Ask clarifying questions when critical information is missing
+- If critical information is still missing, STOP and ask the user to clarify what you cannot infer. Use the ask_user tool if available; otherwise ask directly in chat and wait for an answer.
 
 ---
 

@@ -1,3 +1,4 @@
+<!-- Built from SKILL.src.md for provider: github-copilot. Do not edit directly. -->
 ---
 name: problem-based-srs
 description: Complete Problem-Based Software Requirements Specification methodology following Gorski & Stadzisz research. Use when you need to perform requirements engineering from business problems to functional requirements with full traceability.
@@ -237,6 +238,17 @@ The business context captures: project identity, business principles (Mandatory/
 > **Use the `business-context` skill** for the full template, discovery questions, and examples.
 
 ## How to Use This Skill
+
+### Clarifying Questions Pattern
+
+**Every step in this methodology includes a mandatory Discovery Interview.** Before generating artifacts, each skill MUST stop and ask the user clarifying questions to avoid assumptions. STOP and ask the user to clarify what you cannot infer. Use the ask_user tool if available; otherwise ask directly in chat and wait for an answer.
+
+**Rules for all steps:**
+- Ask **2-3 questions per round**, then STOP and wait for answers
+- Treat existing .spec/ artifacts as anchors — they reduce questions but don't eliminate the interview
+- **Assert-then-confirm:** When context makes one option obvious, state it and ask to confirm or override. Don't present a menu when the answer is already clear.
+- **Skip only when** prior artifacts + user prompt unambiguously answer all needed inputs. State what you're using as basis.
+- Questions must reference the specific context at hand — never ask generic questions
 
 ### Starting Fresh
 When user provides business context or problem description:

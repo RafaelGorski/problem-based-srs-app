@@ -1,3 +1,4 @@
+<!-- Built from SKILL.src.md for provider: github-copilot. Do not edit directly. -->
 ---
 name: software-vision
 description: Transform Software Glance and Customer Needs into a detailed Software Vision with positioning, stakeholders, features, and architecture. Use after Customer Needs. Step 4 of Problem-Based SRS methodology.
@@ -59,6 +60,41 @@ Transform the Software Glance into a detailed Vision document by:
 3. **Defining** scope boundaries to guide the next step (Requirements Specification)
 4. **Describing** high-level architecture (NOT complete architecture design)
 5. **Establishing** stakeholder agreement on software direction
+
+### Discovery Interview (Mandatory)
+
+**STOP. Do NOT generate the Software Vision during this phase.** Your only job is to confirm architectural direction and scope boundaries before committing to a vision.
+
+This is a required interaction. STOP and ask the user to clarify what you cannot infer. Use the ask_user tool if available; otherwise ask directly in chat and wait for an answer.
+
+#### Interview Cadence
+
+- Ask **2-3 questions per round**, then STOP and wait for answers.
+- Treat the Software Glance and Customer Needs as anchors.
+- One round is the default. Add a second only if answers leave material gaps.
+- **Assert-then-confirm, not menu-with-escape.** When the Software Glance implies a deployment model or architecture style, state it and ask to confirm.
+
+#### What to Ask (adapt to context)
+
+**Round 1 — Architecture Direction:**
+- What deployment model is preferred? (Cloud, on-premise, hybrid, mobile) — or state your inference from context and ask to confirm.
+- Are there competitors or existing products this should differentiate from? (Helps positioning statement)
+- What is the expected scale? (Number of users, data volume, geographic distribution)
+
+**Round 2 (only if gaps remain):**
+- Are there specific security or compliance requirements not covered in the Business Context?
+- Should the architecture prioritize time-to-market, scalability, or maintainability?
+
+#### Skip Conditions
+
+Skip the interview when ALL of these are true:
+- The Business Context has complete Constraints and Success Criteria sections
+- The Software Glance includes clear system boundaries and integrations
+- The user's prompt specifies deployment model and scale expectations
+
+When skipping, state in one line what you're using as the basis and proceed.
+
+---
 
 ### What This Step DOES:
 ✅ Provides high-level scope and positioning  
