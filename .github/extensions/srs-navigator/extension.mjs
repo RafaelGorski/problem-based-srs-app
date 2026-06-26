@@ -13,6 +13,7 @@ import { parseSpecificationData, buildGraphData, convertJSONToSpecificationData 
 import { validateSpecificationJSON, validateReferenceIntegrity } from "./lib/validation.mjs";
 import { renderGraphHtml } from "./lib/renderer.mjs";
 import { DEMO_SPEC } from "./lib/demo-spec.mjs";
+import { backgroundSync } from "./lib/skills-sync.mjs";
 
 // Skills directory path
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -383,6 +384,10 @@ const session = await joinSession({
                 const url = `http://127.0.0.1:${server.address().port}/`;
 
                 instances.set(ctx.instanceId, { server, url, html, graphData, specName });
+
+                // Trigger background skills sync (non-blocking)
+                backgroundSync(skillsDir, (msg) => session.log(msg)).catch(() => {});
+
                 return { title: `SRS: ${specName}`, url };
             },
             onClose: async (ctx) => {
@@ -410,3 +415,6 @@ function summarizeGraph(graphData) {
         nonFunctionalRequirements: types.nfr
     };
 }
+
+// Trigger background skills sync on extension startup
+backgroundSync(skillsDir, (msg) => session.log(msg)).catch(() => {});
