@@ -723,6 +723,30 @@ const session = await joinSession({
                                 return;
                             }
 
+                            if (req.url === "/api/refresh-spec" && req.method === "GET") {
+                                (async () => {
+                                    try {
+                                        const result = workspacePathResolved ? await loadFromSpecFolder(workspacePathResolved) : null;
+                                        if (result && inst) {
+                                            const html = renderGraphHtml(result.graphData, { title: result.specName, isDemo: false });
+                                            inst.graphData = result.graphData;
+                                            inst.specName = result.specName;
+                                            inst.html = html;
+                                            inst.isLanding = false;
+                                            res.setHeader("Content-Type", "application/json");
+                                            res.end(JSON.stringify({ refreshed: true, specName: result.specName }));
+                                        } else {
+                                            res.setHeader("Content-Type", "application/json");
+                                            res.end(JSON.stringify({ refreshed: false }));
+                                        }
+                                    } catch {
+                                        res.setHeader("Content-Type", "application/json");
+                                        res.end(JSON.stringify({ refreshed: false }));
+                                    }
+                                })();
+                                return;
+                            }
+
                             if (req.url === "/api/state") {
                                 res.setHeader("Content-Type", "application/json");
                                 res.end(JSON.stringify({
@@ -821,6 +845,31 @@ const session = await joinSession({
                         res.setHeader("Content-Type", "application/json");
                         const queue = pendingActions.get(ctx.instanceId) || [];
                         res.end(JSON.stringify({ actions: queue }));
+                        return;
+                    }
+
+                    if (req.url === "/api/refresh-spec" && req.method === "GET") {
+                        (async () => {
+                            try {
+                                const wp = derivedWorkspacePath || process.env.COPILOT_WORKSPACE_PATH || "";
+                                const result = wp ? await loadFromSpecFolder(wp) : null;
+                                if (result && inst) {
+                                    const newHtml = renderGraphHtml(result.graphData, { title: result.specName, isDemo: false });
+                                    inst.graphData = result.graphData;
+                                    inst.specName = result.specName;
+                                    inst.html = newHtml;
+                                    inst.isLanding = false;
+                                    res.setHeader("Content-Type", "application/json");
+                                    res.end(JSON.stringify({ refreshed: true, specName: result.specName }));
+                                } else {
+                                    res.setHeader("Content-Type", "application/json");
+                                    res.end(JSON.stringify({ refreshed: false }));
+                                }
+                            } catch {
+                                res.setHeader("Content-Type", "application/json");
+                                res.end(JSON.stringify({ refreshed: false }));
+                            }
+                        })();
                         return;
                     }
 
