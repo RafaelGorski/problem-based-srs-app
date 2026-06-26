@@ -955,102 +955,7 @@ export function renderGraphHtml(graphData, options = {}) {
       .action-bar-btn::after { transition: none; }
     }
 
-    /* Landing overlay (shown on top of demo graph) */
-    .landing-overlay {
-      position: fixed;
-      inset: 0;
-      z-index: 200;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: oklch(0.98 0 0 / 0.55);
-      backdrop-filter: blur(6px) saturate(0.7);
-      -webkit-backdrop-filter: blur(6px) saturate(0.7);
-      transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), backdrop-filter 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    }
-    .landing-overlay.dismissing {
-      opacity: 0;
-      backdrop-filter: blur(0px) saturate(1);
-      -webkit-backdrop-filter: blur(0px) saturate(1);
-      pointer-events: none;
-    }
-    @media (prefers-reduced-motion: reduce) {
-      .landing-overlay { transition: none; }
-      .landing-overlay.dismissing { transition: none; }
-    }
-
-    .landing-panel {
-      position: relative;
-      max-width: 480px;
-      width: calc(100% - 48px);
-      padding: 32px 28px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 28px;
-      background: oklch(1 0 0 / 0.88);
-      border: 1px solid oklch(0.87 0.01 240 / 0.6);
-      border-radius: 12px;
-      box-shadow: 0 16px 48px oklch(0 0 0 / 0.10), 0 0 0 1px oklch(0 0 0 / 0.03);
-    }
-
-    .landing-close-btn {
-      position: absolute;
-      top: 12px;
-      right: 12px;
-      width: 28px;
-      height: 28px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      border: none;
-      background: transparent;
-      color: oklch(0.55 0.01 265);
-      font-size: 20px;
-      line-height: 1;
-      border-radius: 6px;
-      cursor: pointer;
-      transition: background 150ms ease-out, color 150ms ease-out;
-    }
-    .landing-close-btn:hover {
-      background: oklch(0.92 0.01 265);
-      color: oklch(0.30 0.02 265);
-    }
-
-    .landing-panel-header {
-      text-align: center;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 14px;
-    }
-    .landing-panel-icon {
-      width: 48px;
-      height: 48px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      border-radius: 10px;
-      background: var(--primary);
-      color: var(--primary-foreground);
-    }
-    .landing-panel-icon svg { width: 24px; height: 24px; }
-    .landing-panel-header h2 {
-      font-size: 20px;
-      font-weight: 700;
-      letter-spacing: -0.02em;
-      line-height: 1.2;
-      color: var(--foreground);
-      text-wrap: balance;
-    }
-    .landing-panel-header p {
-      font-size: 13px;
-      line-height: 1.6;
-      color: oklch(0.35 0.02 240);
-      max-width: 380px;
-      text-wrap: pretty;
-    }
-
+    /* Landing action styles (used in spec modal) */
     .landing-actions {
       display: flex;
       flex-direction: column;
@@ -1239,23 +1144,54 @@ export function renderGraphHtml(graphData, options = {}) {
     </div>
   </div>
 
-  <!-- Load Specification Modal -->
+  <!-- Specification Modal (unified: load, learn, demo) -->
   <div class="modal-overlay" id="spec-modal">
     <div class="modal" role="dialog" aria-labelledby="modal-title">
       <div class="modal-header" style="position:relative">
-        <h2 id="modal-title">Load Specification</h2>
-        <p>Load a Problem-Based SRS from a URL, file, or paste content directly</p>
+        <h2 id="modal-title">SRS Navigator</h2>
+        <p>Load or generate a Problem-Based SRS specification to visualize as an interactive graph.</p>
         <button class="modal-close" id="modal-close" aria-label="Close modal">
           <svg viewBox="0 0 256 256" fill="currentColor"><path d="M205.66,194.34a8,8,0,0,1-11.32,11.32L128,139.31,61.66,205.66a8,8,0,0,1-11.32-11.32L116.69,128,50.34,61.66A8,8,0,0,1,61.66,50.34L128,116.69l66.34-66.35a8,8,0,0,1,11.32,11.32L139.31,128Z"/></svg>
         </button>
       </div>
-      <div class="modal-tabs">
-        <button class="modal-tab active" data-tab="examples">Examples</button>
-        <button class="modal-tab" data-tab="agent">Via Agent</button>
-        <button class="modal-tab" data-tab="format">Format Guide</button>
-      </div>
-      <div class="modal-body" id="modal-body">
-        <!-- Content filled by JS -->
+      <div class="modal-body" id="modal-body" style="padding: 24px; display: flex; flex-direction: column; gap: 12px;">
+        <div class="landing-actions" style="max-width:100%">
+          <button class="landing-action-btn primary" id="modal-btn-learn" aria-label="Create a specification from your project">
+            <span class="landing-action-icon" aria-hidden="true">
+              <svg viewBox="0 0 256 256" fill="currentColor"><path d="M232,128a8,8,0,0,1-8,8H136v88a8,8,0,0,1-16,0V136H32a8,8,0,0,1,0-16h88V32a8,8,0,0,1,16,0v88h88A8,8,0,0,1,232,128Z"/></svg>
+            </span>
+            <span class="landing-action-text">
+              <span class="label">Learn &amp; Create Spec</span>
+              <span class="desc">Scan your project and generate a specification</span>
+            </span>
+          </button>
+          <button class="landing-action-btn" id="modal-btn-load" aria-label="Load an existing specification file">
+            <span class="landing-action-icon" aria-hidden="true">
+              <svg viewBox="0 0 256 256" fill="currentColor"><path d="M213.66,82.34l-56-56A8,8,0,0,0,152,24H56A16,16,0,0,0,40,40V216a16,16,0,0,0,16,16H200a16,16,0,0,0,16-16V88A8,8,0,0,0,213.66,82.34ZM160,51.31,188.69,80H160ZM200,216H56V40h88V88a8,8,0,0,0,8,8h48V216Z"/></svg>
+            </span>
+            <span class="landing-action-text">
+              <span class="label">Load Specification</span>
+              <span class="desc">Open an existing .spec JSON file from your project</span>
+            </span>
+          </button>
+          <button class="landing-action-btn" id="modal-btn-demo" aria-label="Load the built-in demo specification">
+            <span class="landing-action-icon" aria-hidden="true">
+              <svg viewBox="0 0 256 256" fill="currentColor"><path d="M208,24H72A32,32,0,0,0,40,56V224a8,8,0,0,0,8,8H192a8,8,0,0,0,0-16H56a16,16,0,0,1,16-16H208a8,8,0,0,0,8-8V32A8,8,0,0,0,208,24Zm-8,160H72a31.82,31.82,0,0,0-16,4.29V56A16,16,0,0,1,72,40H200Z"/></svg>
+            </span>
+            <span class="landing-action-text">
+              <span class="label">Explore Demo</span>
+              <span class="desc">Load the CRM sample specification to explore features</span>
+            </span>
+          </button>
+        </div>
+        <div class="landing-features" style="margin-top: 8px;">
+          <div class="landing-feature"><span class="landing-feature-dot" aria-hidden="true"></span><span class="landing-feature-text">Force-directed graph</span></div>
+          <div class="landing-feature"><span class="landing-feature-dot" aria-hidden="true"></span><span class="landing-feature-text">Problem → Requirement tracing</span></div>
+          <div class="landing-feature"><span class="landing-feature-dot" aria-hidden="true"></span><span class="landing-feature-text">Focused analysis modes</span></div>
+          <div class="landing-feature"><span class="landing-feature-dot" aria-hidden="true"></span><span class="landing-feature-text">Node detail &amp; connections</span></div>
+          <div class="landing-feature"><span class="landing-feature-dot" aria-hidden="true"></span><span class="landing-feature-text">Search &amp; filter</span></div>
+          <div class="landing-feature"><span class="landing-feature-dot" aria-hidden="true"></span><span class="landing-feature-text">Agent-driven generation</span></div>
+        </div>
       </div>
     </div>
   </div>
@@ -2128,115 +2064,104 @@ export function renderGraphHtml(graphData, options = {}) {
       simulation.alpha(0.3).restart();
     });
 
-    // Spec modal (Load Specification dialog)
+    // Spec modal (unified: learn, load, demo)
     const specModal = document.getElementById("spec-modal");
-    const modalBody = document.getElementById("modal-body");
-    const isDemo = ${isDemo};
-    const specTitle = "${escapeHtml(title)}";
+    const showLandingOnLoad = ${showLanding};
 
-    const modalTabs = {
-      examples: function() {
-        return '<div class="modal-section-title">Built-in Specifications</div>' +
-          '<div class="spec-card' + (specTitle === "CRM System" ? ' current' : '') + '" data-spec="crm">' +
-            '<div class="spec-card-header"><svg width="16" height="16" viewBox="0 0 256 256" fill="currentColor"><path d="M213.66,82.34l-56-56A8,8,0,0,0,152,24H56A16,16,0,0,0,40,40V216a16,16,0,0,0,16,16H200a16,16,0,0,0,16-16V88A8,8,0,0,0,213.66,82.34ZM160,51.31,188.69,80H160ZM200,216H56V40h88V88a8,8,0,0,0,8,8h48V216Z"/></svg><span class="spec-card-title">CRM System</span></div>' +
-            '<div class="spec-card-desc">Customer Relationship Management System Specification</div>' +
-            '<div class="spec-card-meta">Version 1.0 • Problem-Based SRS</div>' +
-          '</div>' +
-          '<div class="modal-section-title" style="margin-top:var(--space-xl)">How to load your own specification</div>' +
-          '<div class="modal-info">' +
-            '<p>Ask the Copilot agent to load your specification:</p>' +
-            '<p style="margin-top:8px"><code>Load my SRS spec from ./path/to/spec.json</code></p>' +
-            '<p style="margin-top:8px">Or use the <code>load_specification</code> action with your JSON data.</p>' +
-          '</div>';
-      },
-      agent: function() {
-        return '<div class="modal-info">' +
-          '<p><strong>Loading specifications via the Copilot agent:</strong></p>' +
-          '<p style="margin-top:12px">The agent can load specifications using these methods:</p>' +
-          '<ul style="margin-top:8px;padding-left:20px;line-height:1.8">' +
-            '<li>Ask: <code>Load my SRS from ./spec.json</code></li>' +
-            '<li>Ask: <code>Validate my specification</code></li>' +
-            '<li>Provide JSON directly in chat</li>' +
-            '<li>Point to a file path in your project</li>' +
-          '</ul>' +
-          '<p style="margin-top:12px">The agent uses the <code>load_specification</code> action which accepts:</p>' +
-          '<ul style="margin-top:8px;padding-left:20px;line-height:1.8">' +
-            '<li><code>filePath</code> — path to a .json spec file</li>' +
-            '<li><code>specification</code> — raw JSON object</li>' +
-            '<li><code>markdown</code> — markdown-formatted spec</li>' +
-          '</ul>' +
-        '</div>';
-      },
-      format: function() {
-        return '<div class="modal-info">' +
-          '<p><strong>Problem-Based SRS JSON Format:</strong></p>' +
-          '<pre style="margin-top:12px;font-family:JetBrains Mono,monospace;font-size:12px;line-height:1.5;white-space:pre-wrap">{\\n' +
-          '  "name": "My System",\\n' +
-          '  "description": "...",\\n' +
-          '  "version": "1.0",\\n' +
-          '  "problems": [\\n' +
-          '    { "id": "CP-1", "title": "...", "description": "..." }\\n' +
-          '  ],\\n' +
-          '  "needs": [\\n' +
-          '    { "id": "CN-1", "title": "...",\\n' +
-          '      "problemIds": ["CP-1"] }\\n' +
-          '  ],\\n' +
-          '  "functionalRequirements": [\\n' +
-          '    { "id": "FR-1", "title": "...",\\n' +
-          '      "needIds": ["CN-1"] }\\n' +
-          '  ],\\n' +
-          '  "nonFunctionalRequirements": [\\n' +
-          '    { "id": "NFR-1", "title": "...",\\n' +
-          '      "needIds": ["CN-1"] }\\n' +
-          '  ]\\n' +
-          '}</pre>' +
-          '<p style="margin-top:12px"><strong>Node types:</strong></p>' +
-          '<ul style="margin-top:8px;padding-left:20px;line-height:1.8">' +
-            '<li><strong>CP</strong> — Customer Problems</li>' +
-            '<li><strong>CN</strong> — Customer Needs (linked to problems)</li>' +
-            '<li><strong>FR</strong> — Functional Requirements (linked to needs)</li>' +
-            '<li><strong>NFR</strong> — Non-Functional Requirements (linked to needs)</li>' +
-          '</ul>' +
-        '</div>';
-      }
-    };
+    function setModalLoading(btn, loading) {
+      btn.classList.toggle('loading', loading);
+      btn.disabled = loading;
+    }
 
     function openModal() {
       specModal.classList.add("active");
-      renderModalTab("examples");
-      // Focus the close button for keyboard users
       setTimeout(() => document.getElementById("modal-close").focus(), 100);
     }
     function closeModal() {
       specModal.classList.remove("active");
-      // Return focus to the trigger button
-      document.getElementById("spec-btn").focus();
-    }
-    function renderModalTab(tab) {
-      document.querySelectorAll(".modal-tab").forEach(t => t.classList.toggle("active", t.dataset.tab === tab));
-      modalBody.innerHTML = modalTabs[tab]();
-      // Wire spec card clicks
-      document.querySelectorAll(".spec-card").forEach(card => {
-        card.addEventListener("click", () => {
-          showToast(card.querySelector(".spec-card-title").textContent + " loaded successfully");
-          closeModal();
-        });
-      });
+      const specBtn = document.getElementById("spec-btn");
+      if (specBtn) specBtn.focus();
     }
 
     document.getElementById("spec-btn").addEventListener("click", openModal);
     document.getElementById("modal-close").addEventListener("click", closeModal);
     specModal.addEventListener("click", (e) => { if (e.target === specModal) closeModal(); });
-    // Escape key closes modal
     document.addEventListener("keydown", (e) => {
       if (e.key === "Escape" && specModal.classList.contains("active")) {
         e.preventDefault();
         closeModal();
       }
     });
-    document.querySelectorAll(".modal-tab").forEach(tab => {
-      tab.addEventListener("click", () => renderModalTab(tab.dataset.tab));
+
+    // Modal action buttons
+    const modalBtnLearn = document.getElementById("modal-btn-learn");
+    const modalBtnLoad = document.getElementById("modal-btn-load");
+    const modalBtnDemo = document.getElementById("modal-btn-demo");
+
+    modalBtnLearn.addEventListener("click", async () => {
+      setModalLoading(modalBtnLearn, true);
+      try {
+        const res = await fetch('/api/landing-action', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'learn' })
+        });
+        const data = await res.json();
+        if (data.ok) startSpecPolling();
+        else setModalLoading(modalBtnLearn, false);
+      } catch { setModalLoading(modalBtnLearn, false); }
     });
+
+    modalBtnLoad.addEventListener("click", async () => {
+      setModalLoading(modalBtnLoad, true);
+      try {
+        const res = await fetch('/api/landing-action', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'load' })
+        });
+        const data = await res.json();
+        if (data.ok) startSpecPolling();
+        else setModalLoading(modalBtnLoad, false);
+      } catch { setModalLoading(modalBtnLoad, false); }
+    });
+
+    modalBtnDemo.addEventListener("click", async () => {
+      setModalLoading(modalBtnDemo, true);
+      try {
+        const res = await fetch('/api/landing-action', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'demo' })
+        });
+        const data = await res.json();
+        if (data.ok && data.reload) window.location.reload();
+        else { setModalLoading(modalBtnDemo, false); closeModal(); }
+      } catch { setModalLoading(modalBtnDemo, false); }
+    });
+
+    // Polling for spec loaded via agent action
+    let specPolling = false;
+    function startSpecPolling() {
+      if (specPolling) return;
+      specPolling = true;
+      const iv = setInterval(async () => {
+        try {
+          const res = await fetch('/api/check-spec');
+          const data = await res.json();
+          if (data.found) {
+            clearInterval(iv);
+            window.location.reload();
+          }
+        } catch {}
+      }, 3000);
+    }
+
+    // Auto-open modal and start polling on landing pages (no spec loaded)
+    if (showLandingOnLoad) {
+      openModal();
+      startSpecPolling();
+    }
 
     // Toast
     const TOAST_ICONS = {
@@ -2314,531 +2239,6 @@ export function renderGraphHtml(graphData, options = {}) {
       }
     };
   })();
-  <\/script>
-${showLanding ? `
-  <div class="landing-overlay" id="landing-overlay" role="dialog" aria-modal="true" aria-label="Get started with SRS Navigator">
-    <div class="landing-panel">
-      <button class="landing-close-btn" id="landing-btn-close" aria-label="Close" title="Close">&times;</button>
-      <div class="landing-panel-header">
-        <div class="landing-panel-icon" aria-hidden="true">
-          <svg viewBox="0 0 256 256" fill="currentColor"><path d="M208,32H48A16,16,0,0,0,32,48V208a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V48A16,16,0,0,0,208,32ZM172.27,96,128,154.16,83.73,96ZM48,48H208V80.24L136.62,170.06a12,12,0,0,1-17.24,0L48,80.24Zm0,160V105.76l60,73.5a28,28,0,0,0,40,0l60-73.5V208Z"/></svg>
-        </div>
-        <h2>SRS Navigator</h2>
-        <p>Visualize Problem-Based SRS specifications as interactive graphs. Trace how customer problems flow through needs into requirements — all without leaving your workflow.</p>
-      </div>
-
-      <div class="landing-actions">
-        <button class="landing-action-btn primary" id="landing-btn-learn" aria-label="Create a specification from your project">
-          <span class="landing-action-icon" aria-hidden="true">
-            <svg viewBox="0 0 256 256" fill="currentColor"><path d="M232,128a8,8,0,0,1-8,8H136v88a8,8,0,0,1-16,0V136H32a8,8,0,0,1,0-16h88V32a8,8,0,0,1,16,0v88h88A8,8,0,0,1,232,128Z"/></svg>
-          </span>
-          <span class="landing-action-text">
-            <span class="label">Learn &amp; Create Spec</span>
-            <span class="desc">Scan your project and generate a specification</span>
-          </span>
-        </button>
-        <button class="landing-action-btn" id="landing-btn-demo" aria-label="Explore this demo specification">
-          <span class="landing-action-icon" aria-hidden="true">
-            <svg viewBox="0 0 256 256" fill="currentColor"><path d="M208,24H72A32,32,0,0,0,40,56V224a8,8,0,0,0,8,8H192a8,8,0,0,0,0-16H56a16,16,0,0,1,16-16H208a8,8,0,0,0,8-8V32A8,8,0,0,0,208,24Zm-8,160H72a31.82,31.82,0,0,0-16,4.29V56A16,16,0,0,1,72,40H200Z"/></svg>
-          </span>
-          <span class="landing-action-text">
-            <span class="label">Explore Demo</span>
-            <span class="desc">Dismiss this panel and interact with the sample graph</span>
-          </span>
-        </button>
-        <button class="landing-action-btn" id="landing-btn-load" aria-label="Load an existing specification file">
-          <span class="landing-action-icon" aria-hidden="true">
-            <svg viewBox="0 0 256 256" fill="currentColor"><path d="M213.66,82.34l-56-56A8,8,0,0,0,152,24H56A16,16,0,0,0,40,40V216a16,16,0,0,0,16,16H200a16,16,0,0,0,16-16V88A8,8,0,0,0,213.66,82.34ZM160,51.31,188.69,80H160ZM200,216H56V40h88V88a8,8,0,0,0,8,8h48V216Z"/></svg>
-          </span>
-          <span class="landing-action-text">
-            <span class="label">Load Specification</span>
-            <span class="desc">Open an existing .spec JSON file</span>
-          </span>
-        </button>
-      </div>
-
-      <div class="landing-features">
-        <div class="landing-feature"><span class="landing-feature-dot" aria-hidden="true"></span><span class="landing-feature-text">Force-directed graph</span></div>
-        <div class="landing-feature"><span class="landing-feature-dot" aria-hidden="true"></span><span class="landing-feature-text">Problem → Requirement tracing</span></div>
-        <div class="landing-feature"><span class="landing-feature-dot" aria-hidden="true"></span><span class="landing-feature-text">Focused analysis modes</span></div>
-        <div class="landing-feature"><span class="landing-feature-dot" aria-hidden="true"></span><span class="landing-feature-text">Node detail &amp; connections</span></div>
-        <div class="landing-feature"><span class="landing-feature-dot" aria-hidden="true"></span><span class="landing-feature-text">Search &amp; filter</span></div>
-        <div class="landing-feature"><span class="landing-feature-dot" aria-hidden="true"></span><span class="landing-feature-text">Agent-driven generation</span></div>
-      </div>
-    </div>
-  </div>
-  <script>
-  (() => {
-    const overlay = document.getElementById('landing-overlay');
-    const btnLearn = document.getElementById('landing-btn-learn');
-    const btnDemo = document.getElementById('landing-btn-demo');
-    const btnLoad = document.getElementById('landing-btn-load');
-    const btnClose = document.getElementById('landing-btn-close');
-
-    function setLoading(btn, loading) {
-      btn.classList.toggle('loading', loading);
-      btn.disabled = loading;
-    }
-
-    function dismissOverlay() {
-      overlay.classList.add('dismissing');
-      setTimeout(() => overlay.remove(), 300);
-    }
-
-    btnClose.addEventListener('click', () => {
-      dismissOverlay();
-    });
-
-    btnDemo.addEventListener('click', () => {
-      dismissOverlay();
-    });
-
-    btnLearn.addEventListener('click', async () => {
-      setLoading(btnLearn, true);
-      try {
-        const res = await fetch('/api/landing-action', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'learn' })
-        });
-        const data = await res.json();
-        if (data.ok) startPolling();
-        else setLoading(btnLearn, false);
-      } catch { setLoading(btnLearn, false); }
-    });
-
-    btnLoad.addEventListener('click', async () => {
-      setLoading(btnLoad, true);
-      try {
-        const res = await fetch('/api/landing-action', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'load' })
-        });
-        const data = await res.json();
-        if (data.ok) startPolling();
-        else setLoading(btnLoad, false);
-      } catch { setLoading(btnLoad, false); }
-    });
-
-    let polling = false;
-    function startPolling() {
-      if (polling) return;
-      polling = true;
-      const iv = setInterval(async () => {
-        try {
-          const res = await fetch('/api/check-spec');
-          const data = await res.json();
-          if (data.found) {
-            clearInterval(iv);
-            window.location.reload();
-          }
-        } catch {}
-      }, 3000);
-    }
-
-    // Start polling immediately — if the agent loads a spec via action, we detect it
-    startPolling();
-  })();
-  <\/script>
-` : ''}
-</body>
-</html>`;
-}
-
-/**
- * Render the landing page shown when no specification is loaded.
- * Centered content describing the extension, with Load Demo and Learn actions.
- */
-export function renderLandingHtml() {
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>SRS Navigator</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
-  <style>
-    :root {
-      --background: oklch(0.98 0 0);
-      --foreground: oklch(0.15 0.02 240);
-      --card: oklch(1 0 0);
-      --primary: oklch(0.35 0.12 265);
-      --primary-foreground: oklch(0.98 0 0);
-      --accent: oklch(0.55 0.15 200);
-      --muted-foreground: oklch(0.40 0.02 240);
-      --border: oklch(0.87 0.01 240);
-      --hover: oklch(0.95 0.005 240);
-      --node-problem: oklch(0.65 0.19 50);
-      --node-need: oklch(0.60 0.15 200);
-      --node-fr: oklch(0.55 0.18 265);
-      --node-nfr: oklch(0.68 0.15 330);
-      --radius: 8px;
-      --space-xs: 4px;
-      --space-sm: 8px;
-      --space-md: 12px;
-      --space-lg: 16px;
-      --space-xl: 24px;
-      --space-2xl: 32px;
-      --transition-fast: 0.15s ease-out;
-    }
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      font-family: 'Space Grotesk', system-ui, -apple-system, sans-serif;
-      background: var(--background);
-      color: var(--foreground);
-      height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      overflow: auto;
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      *, *::before, *::after {
-        animation-duration: 0.01ms !important;
-        transition-duration: 0.01ms !important;
-      }
-    }
-
-    :focus-visible {
-      outline: 2px solid var(--accent);
-      outline-offset: 2px;
-    }
-    :focus:not(:focus-visible) { outline: none; }
-
-    .landing {
-      max-width: 520px;
-      width: 100%;
-      padding: var(--space-2xl) var(--space-xl);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: var(--space-2xl);
-    }
-
-    /* Header */
-    .landing-header {
-      text-align: center;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: var(--space-lg);
-    }
-    .landing-icon {
-      width: 56px;
-      height: 56px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      border-radius: 12px;
-      background: var(--primary);
-      color: var(--primary-foreground);
-    }
-    .landing-icon svg { width: 28px; height: 28px; }
-    .landing-header h1 {
-      font-size: 22px;
-      font-weight: 700;
-      letter-spacing: -0.02em;
-      line-height: 1.2;
-      color: var(--foreground);
-    }
-    .landing-header p {
-      font-size: 14px;
-      line-height: 1.65;
-      color: var(--muted-foreground);
-      max-width: 420px;
-      text-wrap: pretty;
-    }
-
-    /* Actions */
-    .landing-actions {
-      display: flex;
-      flex-direction: column;
-      gap: var(--space-md);
-      width: 100%;
-      max-width: 340px;
-    }
-    .action-btn {
-      display: flex;
-      align-items: center;
-      gap: var(--space-md);
-      width: 100%;
-      padding: var(--space-lg);
-      border-radius: var(--radius);
-      border: 1px solid var(--border);
-      background: var(--card);
-      color: var(--foreground);
-      font-family: inherit;
-      font-size: 14px;
-      font-weight: 500;
-      text-align: left;
-      cursor: pointer;
-      transition: background var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast);
-    }
-    .action-btn:hover {
-      background: var(--hover);
-      border-color: oklch(0.78 0.02 240);
-    }
-    .action-btn:active {
-      transform: scale(0.985);
-    }
-    .action-btn.primary {
-      background: var(--primary);
-      color: var(--primary-foreground);
-      border-color: var(--primary);
-    }
-    .action-btn.primary:hover {
-      background: oklch(0.30 0.12 265);
-      border-color: oklch(0.30 0.12 265);
-    }
-    .action-icon {
-      width: 36px;
-      height: 36px;
-      flex-shrink: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      border-radius: 8px;
-      background: oklch(0.95 0.01 240);
-    }
-    .action-btn.primary .action-icon {
-      background: oklch(0.28 0.10 265);
-    }
-    .action-icon svg { width: 18px; height: 18px; }
-    .action-text {
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-      min-width: 0;
-    }
-    .action-text .label {
-      font-weight: 600;
-      font-size: 13px;
-      line-height: 1.3;
-    }
-    .action-text .desc {
-      font-size: 12px;
-      font-weight: 400;
-      color: var(--muted-foreground);
-      line-height: 1.4;
-    }
-    .action-btn.primary .action-text .desc {
-      color: oklch(0.80 0.03 265);
-    }
-
-    /* Features */
-    .features {
-      width: 100%;
-      display: flex;
-      flex-direction: column;
-      gap: var(--space-md);
-    }
-    .features-heading {
-      font-size: 11px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      color: var(--muted-foreground);
-      padding: 0 var(--space-xs);
-    }
-    .feature-list {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: var(--space-sm);
-    }
-    .feature-item {
-      display: flex;
-      align-items: flex-start;
-      gap: var(--space-sm);
-      padding: var(--space-md);
-      border-radius: 6px;
-      background: var(--card);
-      border: 1px solid var(--border);
-    }
-    .feature-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      flex-shrink: 0;
-      margin-top: 4px;
-    }
-    .feature-item:nth-child(1) .feature-dot { background: var(--node-problem); }
-    .feature-item:nth-child(2) .feature-dot { background: var(--node-need); }
-    .feature-item:nth-child(3) .feature-dot { background: var(--node-fr); }
-    .feature-item:nth-child(4) .feature-dot { background: var(--node-nfr); }
-    .feature-item:nth-child(5) .feature-dot { background: var(--accent); }
-    .feature-item:nth-child(6) .feature-dot { background: var(--primary); }
-    .feature-text {
-      font-size: 12px;
-      font-weight: 500;
-      line-height: 1.4;
-      color: var(--foreground);
-    }
-
-    /* Loading state */
-    .action-btn.loading {
-      pointer-events: none;
-      opacity: 0.7;
-    }
-    .action-btn.loading .action-icon {
-      animation: pulse 1.5s ease-in-out infinite;
-    }
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.5; }
-    }
-  </style>
-</head>
-<body>
-  <main class="landing" role="main" aria-label="SRS Navigator welcome">
-    <div class="landing-header">
-      <div class="landing-icon" aria-hidden="true">
-        <svg viewBox="0 0 256 256" fill="currentColor"><path d="M208,32H48A16,16,0,0,0,32,48V208a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V48A16,16,0,0,0,208,32ZM172.27,96,128,154.16,83.73,96ZM48,48H208V80.24L136.62,170.06a12,12,0,0,1-17.24,0L48,80.24Zm0,160V105.76l60,73.5a28,28,0,0,0,40,0l60-73.5V208Z"/></svg>
-      </div>
-      <h1>SRS Navigator</h1>
-      <p>Visualize and navigate Problem-Based SRS specifications as interactive force-directed graphs. Trace how customer problems flow through needs into functional and non-functional requirements.</p>
-    </div>
-
-    <div class="landing-actions">
-      <button class="action-btn primary" id="btn-learn" aria-label="Create a specification from your project">
-        <span class="action-icon" aria-hidden="true">
-          <svg viewBox="0 0 256 256" fill="currentColor"><path d="M232,128a8,8,0,0,1-8,8H136v88a8,8,0,0,1-16,0V136H32a8,8,0,0,1,0-16h88V32a8,8,0,0,1,16,0v88h88A8,8,0,0,1,232,128Z"/></svg>
-        </span>
-        <span class="action-text">
-          <span class="label">Learn &amp; Create Spec</span>
-          <span class="desc">Scan your project and generate a Problem-Based SRS specification</span>
-        </span>
-      </button>
-      <button class="action-btn" id="btn-demo" aria-label="Load a demo specification to explore features">
-        <span class="action-icon" aria-hidden="true">
-          <svg viewBox="0 0 256 256" fill="currentColor"><path d="M208,24H72A32,32,0,0,0,40,56V224a8,8,0,0,0,8,8H192a8,8,0,0,0,0-16H56a16,16,0,0,1,16-16H208a8,8,0,0,0,8-8V32A8,8,0,0,0,208,24Zm-8,160H72a31.82,31.82,0,0,0-16,4.29V56A16,16,0,0,1,72,40H200Z"/></svg>
-        </span>
-        <span class="action-text">
-          <span class="label">Load Demo</span>
-          <span class="desc">Explore a sample CRM specification to see the graph in action</span>
-        </span>
-      </button>
-      <button class="action-btn" id="btn-load" aria-label="Load an existing specification file">
-        <span class="action-icon" aria-hidden="true">
-          <svg viewBox="0 0 256 256" fill="currentColor"><path d="M213.66,82.34l-56-56A8,8,0,0,0,152,24H56A16,16,0,0,0,40,40V216a16,16,0,0,0,16,16H200a16,16,0,0,0,16-16V88A8,8,0,0,0,213.66,82.34ZM160,51.31,188.69,80H160ZM200,216H56V40h88V88a8,8,0,0,0,8,8h48V216Z"/></svg>
-        </span>
-        <span class="action-text">
-          <span class="label">Load Specification</span>
-          <span class="desc">Open an existing .spec JSON file from your workspace</span>
-        </span>
-      </button>
-    </div>
-
-    <div class="features">
-      <div class="features-heading">Capabilities</div>
-      <div class="feature-list">
-        <div class="feature-item">
-          <span class="feature-dot" aria-hidden="true"></span>
-          <span class="feature-text">Force-directed graph visualization</span>
-        </div>
-        <div class="feature-item">
-          <span class="feature-dot" aria-hidden="true"></span>
-          <span class="feature-text">Traceability from problems to requirements</span>
-        </div>
-        <div class="feature-item">
-          <span class="feature-dot" aria-hidden="true"></span>
-          <span class="feature-text">Analysis modes for focused views</span>
-        </div>
-        <div class="feature-item">
-          <span class="feature-dot" aria-hidden="true"></span>
-          <span class="feature-text">Node detail panel with connections</span>
-        </div>
-        <div class="feature-item">
-          <span class="feature-dot" aria-hidden="true"></span>
-          <span class="feature-text">Search and filter across all node types</span>
-        </div>
-        <div class="feature-item">
-          <span class="feature-dot" aria-hidden="true"></span>
-          <span class="feature-text">Agent-driven spec generation</span>
-        </div>
-      </div>
-    </div>
-  </main>
-
-  <script>
-    const btnLearn = document.getElementById('btn-learn');
-    const btnDemo = document.getElementById('btn-demo');
-    const btnLoad = document.getElementById('btn-load');
-
-    function setLoading(btn, loading) {
-      btn.classList.toggle('loading', loading);
-      btn.disabled = loading;
-    }
-
-    btnLearn.addEventListener('click', async () => {
-      setLoading(btnLearn, true);
-      try {
-        const res = await fetch('/api/landing-action', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'learn' })
-        });
-        const data = await res.json();
-        if (!data.ok) setLoading(btnLearn, false);
-      } catch { setLoading(btnLearn, false); }
-    });
-
-    btnDemo.addEventListener('click', async () => {
-      setLoading(btnDemo, true);
-      try {
-        const res = await fetch('/api/landing-action', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'demo' })
-        });
-        const data = await res.json();
-        if (data.ok && data.reload) {
-          window.location.reload();
-        } else {
-          setLoading(btnDemo, false);
-        }
-      } catch { setLoading(btnDemo, false); }
-    });
-
-    btnLoad.addEventListener('click', async () => {
-      setLoading(btnLoad, true);
-      try {
-        const res = await fetch('/api/landing-action', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'load' })
-        });
-        const data = await res.json();
-        if (!data.ok) setLoading(btnLoad, false);
-      } catch { setLoading(btnLoad, false); }
-    });
-
-    // Poll for spec appearance after learn/load actions are triggered
-    let polling = false;
-    let pollInterval = null;
-
-    function startPolling() {
-      if (polling) return;
-      polling = true;
-      pollInterval = setInterval(async () => {
-        try {
-          const res = await fetch('/api/check-spec');
-          const data = await res.json();
-          if (data.found) {
-            clearInterval(pollInterval);
-            polling = false;
-            window.location.reload();
-          }
-        } catch { /* continue polling */ }
-      }, 3000);
-    }
-
-    // Start polling after learn or load actions
-    btnLearn.addEventListener('click', () => { setTimeout(startPolling, 2000); });
-    btnLoad.addEventListener('click', () => { setTimeout(startPolling, 2000); });
   <\/script>
 </body>
 </html>`;

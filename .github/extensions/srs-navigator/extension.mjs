@@ -873,6 +873,68 @@ const session = await joinSession({
                         return;
                     }
 
+                    if (req.url === "/api/landing-action" && req.method === "POST") {
+                        let body = "";
+                        req.on("data", (chunk) => { body += chunk; });
+                        req.on("end", async () => {
+                            try {
+                                const { action } = JSON.parse(body);
+                                if (action === "demo") {
+                                    const result = loadAndBuildGraph(DEMO_SPEC);
+                                    const newHtml = renderGraphHtml(result.graphData, { title: result.specName, isDemo: true });
+                                    if (inst) {
+                                        inst.graphData = result.graphData;
+                                        inst.specName = result.specName;
+                                        inst.html = newHtml;
+                                        inst.isLanding = false;
+                                    }
+                                    res.setHeader("Content-Type", "application/json");
+                                    res.end(JSON.stringify({ ok: true, reload: true }));
+                                } else if (action === "learn") {
+                                    const prompt = [
+                                        "## SRS Navigator: Learn & Create Specification",
+                                        "",
+                                        "The user wants to create a Problem-Based SRS specification for their project.",
+                                        "Use the `problem_based_srs` tool to run the full methodology.",
+                                        "Scan the workspace for existing code, README, and documentation to provide context.",
+                                        "",
+                                        "**CRITICAL - Display the graph:** After creating the JSON file, you MUST use the `load_specification` canvas action",
+                                        "with the ABSOLUTE file path to the JSON file. Do NOT skip this step.",
+                                    ].join("\n");
+                                    await session.send({ prompt });
+                                    res.setHeader("Content-Type", "application/json");
+                                    res.end(JSON.stringify({ ok: true, sent: true }));
+                                } else if (action === "load") {
+                                    const prompt = [
+                                        "## SRS Navigator: Load Specification",
+                                        "",
+                                        "The user wants to load an existing specification file.",
+                                        "Look for .spec/*.json files in the workspace, or ask the user which file to load.",
+                                        "Then use the `load_specification` canvas action to display it.",
+                                    ].join("\n");
+                                    await session.send({ prompt });
+                                    res.setHeader("Content-Type", "application/json");
+                                    res.end(JSON.stringify({ ok: true, sent: true }));
+                                } else {
+                                    res.statusCode = 400;
+                                    res.setHeader("Content-Type", "application/json");
+                                    res.end(JSON.stringify({ ok: false, error: "Unknown action" }));
+                                }
+                            } catch (e) {
+                                res.statusCode = 500;
+                                res.setHeader("Content-Type", "application/json");
+                                res.end(JSON.stringify({ ok: false, error: e.message }));
+                            }
+                        });
+                        return;
+                    }
+
+                    if (req.url === "/api/check-spec" && req.method === "GET") {
+                        res.setHeader("Content-Type", "application/json");
+                        res.end(JSON.stringify({ found: true, specName: inst?.specName }));
+                        return;
+                    }
+
                     if (req.url === "/api/state") {
                         res.setHeader("Content-Type", "application/json");
                         res.end(JSON.stringify({
