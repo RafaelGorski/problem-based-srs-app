@@ -940,11 +940,15 @@ export function renderGraphHtml(graphData, options = {}) {
         }
       });
 
-      // Node size scale: base 22, scale up for degree
+      // Node size scale: base 22, only scale up for "Need Cluster" hubs
       const maxDegree = Math.max(...nodes.map(n => n._degree), 1);
       nodes.forEach(n => {
-        // Scale from 22 (min) to 34 (max) based on relative degree
-        n._radius = 22 + (n._degree / maxDegree) * 12;
+        // Only hubs (Need Clusters) get larger; all other nodes stay at base size
+        if (n._hotspot === 'hub') {
+          n._radius = 22 + (n._degree / maxDegree) * 10;
+        } else {
+          n._radius = 22;
+        }
       });
 
       return { orphanedProblems, unmetNeeds, hubs, leafNodes, maxDegree };
@@ -971,7 +975,7 @@ export function renderGraphHtml(graphData, options = {}) {
         html += '<div class="health-metric" data-filter="isolated" title="Completely disconnected nodes"><span class="count alert">' + hotspots.leafNodes.length + '</span><span class="label">isolated</span></div>';
       }
       if (hotspots.hubs.length > 0) {
-        html += '<div class="health-metric" data-filter="hub" title="High-connectivity nodes (4+ connections)"><span class="count ok">' + hotspots.hubs.length + '</span><span class="label">hubs</span></div>';
+        html += '<div class="health-metric" data-filter="hub" title="High-connectivity need nodes (4+ connections)"><span class="count ok">' + hotspots.hubs.length + '</span><span class="label">need clusters</span></div>';
       }
 
       html += '<div class="health-metric-sep"></div>';
@@ -1002,7 +1006,7 @@ export function renderGraphHtml(graphData, options = {}) {
       .force("link", d3.forceLink(links).id(d => d.id).distance(150))
       .force("charge", d3.forceManyBody().strength(-400))
       .force("center", d3.forceCenter(width / 2, height / 2))
-      .force("collision", d3.forceCollide().radius(d => (d._radius || 22) + 28));
+      .force("collision", d3.forceCollide().radius(d => (d._radius || 22) + 35));
 
     // Hull group (for selection highlighting)
     const hullGroup = g.append("g").attr("class", "hull-group");
@@ -1052,10 +1056,10 @@ export function renderGraphHtml(graphData, options = {}) {
       .attr("pointer-events", "none")
       .html(d => '<div style="width:40px;height:40px;display:flex;align-items:center;justify-content:center;color:' + (nodeColors[d.type]?.fill || '#666') + '">' + (nodeIcons[d.type] || '') + '</div>');
 
-    // Node ID text
+    // Node ID text (positioned below plate, dynamic based on radius)
     nodeElements.append("text")
       .attr("class", "node-id")
-      .attr("dy", 35)
+      .attr("dy", d => (d._radius || 22) + 13)
       .text(d => d.id);
 
     // Node label text (with word wrap)
@@ -1080,7 +1084,7 @@ export function renderGraphHtml(graphData, options = {}) {
 
       const text = group.append("text")
         .attr("class", "node-label")
-        .attr("y", 48);
+        .attr("y", d._radius + 26);
 
       lines.forEach((lineText, i) => {
         text.append("tspan")
@@ -1135,7 +1139,7 @@ export function renderGraphHtml(graphData, options = {}) {
         const insights = {
           orphaned: { icon: '⚠', color: 'oklch(0.55 0.19 50)', text: 'Orphaned — no linked needs. This problem lacks traceability to requirements.' },
           unmet: { icon: '⚠', color: 'oklch(0.55 0.15 200)', text: 'Unmet — no linked requirements. This need has no FR/NFR addressing it.' },
-          hub: { icon: '◉', color: 'oklch(0.45 0.15 145)', text: 'Hub — high connectivity (' + node._degree + ' connections). Key node in the dependency graph.' },
+          hub: { icon: '◉', color: 'oklch(0.45 0.15 145)', text: 'Need Cluster — high connectivity (' + node._degree + ' connections). Key convergence point in the dependency graph.' },
           isolated: { icon: '⊘', color: 'oklch(0.55 0.19 50)', text: 'Isolated — no connections at all. This node is disconnected from the spec.' }
         };
         const insight = insights[node._hotspot];
