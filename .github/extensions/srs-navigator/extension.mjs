@@ -97,6 +97,9 @@ function buildSkillTools() {
 // Per-instance state: server + loaded graph data
 const instances = new Map();
 
+// Pending action queues per instance (browser → agent communication)
+const pendingActions = new Map();
+
 async function startServer(instanceId, graphData, specName) {
     const html = renderGraphHtml(graphData, { title: specName });
 
@@ -329,6 +332,41 @@ const session = await joinSession({
                             }))
                         };
                     }
+                },
+                {
+                    name: "pending_actions",
+                    description: "Retrieve and consume pending actions queued from the canvas UI. When an engineer clicks an action button on a node (e.g., +CN, +FR, +NFR, decompose), the action is queued here with the skill name and context. The agent should invoke the corresponding skill tool with the provided context. Returns the queue and clears it.",
+                    handler: async (ctx) => {
+                        const queue = pendingActions.get(ctx.instanceId) || [];
+                        // Clear the queue after retrieval
+                        pendingActions.set(ctx.instanceId, []);
+
+                        if (queue.length === 0) {
+                            return { actions: [], message: "No pending actions" };
+                        }
+
+                        // Enrich each action with skill instructions
+                        const enriched = await Promise.all(queue.map(async (action) => {
+                            let skillContent = "";
+                            try {
+                                const skillFile = SKILLS.find(s => s.name === action.skill)?.file;
+                                if (skillFile) {
+                                    skillContent = await readFile(resolve(skillsDir, skillFile), "utf-8");
+                                }
+                            } catch { /* skill file read failure is non-fatal */ }
+
+                            return {
+                                ...action,
+                                instruction: `Use the "${action.skill}" methodology skill to process this action. Context:\n\n${action.context}`,
+                                skillContent,
+                            };
+                        }));
+
+                        return {
+                            actions: enriched,
+                            message: `${enriched.length} action(s) ready. For each action, invoke the specified skill tool with the provided context.`,
+                        };
+                    }
                 }
             ],
             open: async (ctx) => {
@@ -367,6 +405,39 @@ const session = await joinSession({
 
                 const server = createServer((req, res) => {
                     const inst = instances.get(ctx.instanceId);
+
+                    if (req.url === "/api/invoke-skill" && req.method === "POST") {
+                        let body = "";
+                        req.on("data", (chunk) => { body += chunk; });
+                        req.on("end", () => {
+                            try {
+                                const action = JSON.parse(body);
+                                // Queue the action for agent consumption
+                                if (!pendingActions.has(ctx.instanceId)) {
+                                    pendingActions.set(ctx.instanceId, []);
+                                }
+                                pendingActions.get(ctx.instanceId).push({
+                                    id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+                                    timestamp: new Date().toISOString(),
+                                    ...action,
+                                });
+                                res.setHeader("Content-Type", "application/json");
+                                res.end(JSON.stringify({ ok: true, queued: true }));
+                            } catch (e) {
+                                res.statusCode = 400;
+                                res.end(JSON.stringify({ error: "Invalid JSON" }));
+                            }
+                        });
+                        return;
+                    }
+
+                    if (req.url === "/api/pending-actions") {
+                        res.setHeader("Content-Type", "application/json");
+                        const queue = pendingActions.get(ctx.instanceId) || [];
+                        res.end(JSON.stringify({ actions: queue }));
+                        return;
+                    }
+
                     if (req.url === "/api/state") {
                         res.setHeader("Content-Type", "application/json");
                         res.end(JSON.stringify({
@@ -394,6 +465,7 @@ const session = await joinSession({
                 const entry = instances.get(ctx.instanceId);
                 if (entry) {
                     instances.delete(ctx.instanceId);
+                    pendingActions.delete(ctx.instanceId);
                     await new Promise((r) => entry.server.close(() => r()));
                 }
             },
