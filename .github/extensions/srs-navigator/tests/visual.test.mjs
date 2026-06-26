@@ -5,7 +5,7 @@
  */
 import { test, expect } from '@playwright/test';
 
-const CANVAS_URL = process.env.CANVAS_URL || 'http://127.0.0.1:52030/';
+const CANVAS_URL = process.env.CANVAS_URL || 'http://127.0.0.1:53585/';
 
 test.describe('SRS Navigator Canvas - Visual Rendering', () => {
   test.beforeEach(async ({ page }) => {
@@ -247,6 +247,100 @@ test.describe('SRS Navigator Canvas - Visual Rendering', () => {
       }, viewportWidth);
       // Allow some tolerance (nodes at edges during initial simulation)
       expect(overflows).toBeLessThan(10);
+    });
+  });
+
+  test.describe('Accessibility & Hardening', () => {
+    test('health bar metrics have ARIA role=button and tabindex', async ({ page }) => {
+      const metrics = await page.evaluate(() => {
+        const els = document.querySelectorAll('.health-metric[data-filter]');
+        const results = [];
+        els.forEach(el => {
+          results.push({
+            role: el.getAttribute('role'),
+            tabindex: el.getAttribute('tabindex'),
+            ariaLabel: el.getAttribute('aria-label'),
+            ariaPressed: el.getAttribute('aria-pressed')
+          });
+        });
+        return results;
+      });
+
+      expect(metrics.length).toBeGreaterThan(0);
+      for (const m of metrics) {
+        expect(m.role).toBe('button');
+        expect(m.tabindex).toBe('0');
+        expect(m.ariaLabel).toBeTruthy();
+        expect(m.ariaPressed).toBe('false');
+      }
+    });
+
+    test('health bar metrics respond to keyboard Enter/Space', async ({ page }) => {
+      const metric = page.locator('.health-metric[data-filter="hub"]');
+      if (await metric.count() > 0) {
+        await metric.first().focus();
+        await page.keyboard.press('Enter');
+        const pressed = await metric.first().getAttribute('aria-pressed');
+        expect(pressed).toBe('true');
+        // Press again to toggle off
+        await page.keyboard.press('Space');
+        const pressedAfter = await metric.first().getAttribute('aria-pressed');
+        expect(pressedAfter).toBe('false');
+      }
+    });
+
+    test('Escape key closes the modal', async ({ page }) => {
+      await page.click('#spec-btn');
+      await page.waitForSelector('.modal-overlay.active');
+      await page.keyboard.press('Escape');
+      const isActive = await page.evaluate(() =>
+        document.getElementById('spec-modal').classList.contains('active')
+      );
+      expect(isActive).toBe(false);
+    });
+
+    test('modal returns focus to trigger button on close', async ({ page }) => {
+      await page.click('#spec-btn');
+      await page.waitForSelector('.modal-overlay.active');
+      await page.keyboard.press('Escape');
+      const focusedId = await page.evaluate(() => document.activeElement.id);
+      expect(focusedId).toBe('spec-btn');
+    });
+
+    test('sr-announcer live region exists', async ({ page }) => {
+      const announcer = await page.locator('#sr-announcer');
+      await expect(announcer).toHaveAttribute('aria-live', 'assertive');
+      await expect(announcer).toHaveAttribute('aria-atomic', 'true');
+    });
+
+    test('node labels are truncated to max 3 lines', async ({ page }) => {
+      const labelCounts = await page.evaluate(() => {
+        const labels = document.querySelectorAll('.node-label');
+        let maxTspans = 0;
+        labels.forEach(l => {
+          const count = l.querySelectorAll('tspan').length;
+          if (count > maxTspans) maxTspans = count;
+        });
+        return maxTspans;
+      });
+      expect(labelCounts).toBeLessThanOrEqual(3);
+    });
+
+    test('prefers-reduced-motion CSS is present', async ({ page }) => {
+      const hasReducedMotion = await page.evaluate(() => {
+        const sheets = document.styleSheets;
+        for (const sheet of sheets) {
+          try {
+            for (const rule of sheet.cssRules) {
+              if (rule.conditionText && rule.conditionText.includes('prefers-reduced-motion')) {
+                return true;
+              }
+            }
+          } catch (e) {}
+        }
+        return false;
+      });
+      expect(hasReducedMotion).toBe(true);
     });
   });
 });

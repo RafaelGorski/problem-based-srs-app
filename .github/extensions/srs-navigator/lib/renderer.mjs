@@ -65,6 +65,7 @@ export function renderGraphHtml(graphData, options = {}) {
       --transition-normal: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
     }
     * { margin: 0; padding: 0; box-sizing: border-box; }
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
     body {
       font-family: 'Space Grotesk', system-ui, -apple-system, sans-serif;
       background: var(--background);
@@ -545,6 +546,69 @@ export function renderGraphHtml(graphData, options = {}) {
     }
     @media (prefers-reduced-motion: reduce) {
       .hotspot-ring { animation: none; opacity: 0.25; r: 28; }
+      *, *::before, *::after {
+        transition-duration: 0.01ms !important;
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+      }
+    }
+
+    /* Focus visible for keyboard navigation */
+    .health-metric:focus-visible,
+    .btn:focus-visible,
+    .btn-icon:focus-visible,
+    .spec-btn:focus-visible,
+    .conn-badge:focus-visible,
+    .modal-tab:focus-visible {
+      outline: 2px solid oklch(0.55 0.15 200);
+      outline-offset: 2px;
+    }
+
+    /* Text overflow protection */
+    .node-label, .node-id {
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .node-title {
+      overflow-wrap: break-word;
+      word-break: break-word;
+    }
+    .detail-body { overflow-wrap: break-word; }
+
+    /* Empty state */
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      gap: var(--space-md);
+      color: var(--muted-foreground);
+      font-size: 14px;
+      text-align: center;
+      padding: var(--space-xl);
+    }
+    .empty-state svg { opacity: 0.4; }
+
+    /* Error state */
+    .error-banner {
+      padding: var(--space-sm) var(--space-lg);
+      background: oklch(0.95 0.05 30);
+      border-bottom: 1px solid oklch(0.85 0.10 30);
+      color: oklch(0.40 0.15 30);
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      gap: var(--space-sm);
+    }
+    .error-banner button {
+      margin-left: auto;
+      background: none;
+      border: none;
+      color: inherit;
+      text-decoration: underline;
+      cursor: pointer;
+      font-size: 12px;
     }
 
     /* Demo indicator badge */
@@ -770,7 +834,7 @@ export function renderGraphHtml(graphData, options = {}) {
     </div>
   </div>
 
-  <div class="health-bar" id="health-bar"></div>
+  <div class="health-bar" id="health-bar" role="toolbar" aria-label="Specification health metrics"></div>
 
   <div class="graph-container" id="graph-container">
     <svg id="graph-svg"></svg>
@@ -818,10 +882,11 @@ export function renderGraphHtml(graphData, options = {}) {
   </div>
 
   <!-- Toast notification -->
-  <div class="toast" id="toast">
+  <div class="toast" id="toast" role="status" aria-live="polite">
     <svg width="16" height="16" viewBox="0 0 256 256" fill="currentColor"><path d="M173.66,98.34a8,8,0,0,1,0,11.32l-56,56a8,8,0,0,1-11.32,0l-24-24a8,8,0,0,1,11.32-11.32L112,148.69l50.34-50.35A8,8,0,0,1,173.66,98.34ZM232,128A104,104,0,1,1,128,24,104.11,104.11,0,0,1,232,128Zm-16,0a88,88,0,1,0-88,88A88.1,88.1,0,0,0,216,128Z"/></svg>
     <span id="toast-text"></span>
   </div>
+  <div id="sr-announcer" class="sr-only" aria-live="assertive" aria-atomic="true"></div>
 
   <script>
   (function() {
@@ -831,6 +896,17 @@ export function renderGraphHtml(graphData, options = {}) {
     let currentMode = "${analysisMode}";
     let searchTerm = "";
     let selectedNode = ${selectedNodeId ? `"${selectedNodeId}"` : 'null'};
+
+    // Guard: validate graph data
+    if (!graphData || !Array.isArray(graphData.nodes) || !Array.isArray(graphData.links)) {
+      document.getElementById('graph-container').innerHTML = '<div class="empty-state"><svg width="48" height="48" viewBox="0 0 256 256" fill="currentColor"><path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm0,192a88,88,0,1,1,88-88A88.1,88.1,0,0,1,128,216Zm-8-80V80a8,8,0,0,1,16,0v56a8,8,0,0,1-16,0Zm20,36a12,12,0,1,1-12-12A12,12,0,0,1,140,172Z"/></svg><p>No valid specification data.<br/>Use the agent to load a specification.</p></div>';
+      return;
+    }
+
+    if (graphData.nodes.length === 0) {
+      document.getElementById('graph-container').innerHTML = '<div class="empty-state"><svg width="48" height="48" viewBox="0 0 256 256" fill="currentColor"><path d="M208,32H48A16,16,0,0,0,32,48V208a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V48A16,16,0,0,0,208,32Zm0,176H48V48H208V208Z"/></svg><p>Specification is empty.<br/>Add problems, needs, and requirements to visualize.</p></div>';
+      return;
+    }
 
     // Problem badge
     const problemCount = graphData.nodes.filter(n => n.type === "problem").length;
@@ -961,44 +1037,69 @@ export function renderGraphHtml(graphData, options = {}) {
       const gaps = hotspots.orphanedProblems.length + hotspots.unmetNeeds.length + hotspots.leafNodes.length;
       const coverage = total > 0 ? Math.round(((total - gaps) / total) * 100) : 100;
 
+      if (total === 0) {
+        bar.innerHTML = '<div class="health-metric"><span class="label">No nodes to analyze</span></div>';
+        return;
+      }
+
       let html = '';
-      html += '<div class="health-metric" data-filter="all"><span class="count">' + total + '</span><span class="label">nodes</span></div>';
-      html += '<div class="health-metric-sep"></div>';
+      html += '<div class="health-metric" role="button" tabindex="0" aria-pressed="false" data-filter="all" aria-label="' + total + ' total nodes"><span class="count">' + total + '</span><span class="label">nodes</span></div>';
+      html += '<div class="health-metric-sep" aria-hidden="true"></div>';
 
       if (hotspots.orphanedProblems.length > 0) {
-        html += '<div class="health-metric" data-filter="orphaned" title="Problems with no linked needs"><span class="count alert">' + hotspots.orphanedProblems.length + '</span><span class="label">orphaned problems</span></div>';
+        html += '<div class="health-metric" role="button" tabindex="0" aria-pressed="false" data-filter="orphaned" title="Problems with no linked needs" aria-label="' + hotspots.orphanedProblems.length + ' orphaned problems"><span class="count alert">' + hotspots.orphanedProblems.length + '</span><span class="label">orphaned problems</span></div>';
       }
       if (hotspots.unmetNeeds.length > 0) {
-        html += '<div class="health-metric" data-filter="unmet" title="Needs with no linked requirements"><span class="count alert">' + hotspots.unmetNeeds.length + '</span><span class="label">unmet needs</span></div>';
+        html += '<div class="health-metric" role="button" tabindex="0" aria-pressed="false" data-filter="unmet" title="Needs with no linked requirements" aria-label="' + hotspots.unmetNeeds.length + ' unmet needs"><span class="count alert">' + hotspots.unmetNeeds.length + '</span><span class="label">unmet needs</span></div>';
       }
       if (hotspots.leafNodes.length > 0) {
-        html += '<div class="health-metric" data-filter="isolated" title="Completely disconnected nodes"><span class="count alert">' + hotspots.leafNodes.length + '</span><span class="label">isolated</span></div>';
+        html += '<div class="health-metric" role="button" tabindex="0" aria-pressed="false" data-filter="isolated" title="Completely disconnected nodes" aria-label="' + hotspots.leafNodes.length + ' isolated nodes"><span class="count alert">' + hotspots.leafNodes.length + '</span><span class="label">isolated</span></div>';
       }
       if (hotspots.hubs.length > 0) {
-        html += '<div class="health-metric" data-filter="hub" title="High-connectivity need nodes (4+ connections)"><span class="count ok">' + hotspots.hubs.length + '</span><span class="label">need clusters</span></div>';
+        html += '<div class="health-metric" role="button" tabindex="0" aria-pressed="false" data-filter="hub" title="High-connectivity need nodes (4+ connections)" aria-label="' + hotspots.hubs.length + ' need clusters"><span class="count ok">' + hotspots.hubs.length + '</span><span class="label">need clusters</span></div>';
       }
 
-      html += '<div class="health-metric-sep"></div>';
-      html += '<div class="health-metric" data-filter="all"><span class="count ' + (coverage === 100 ? 'ok' : coverage >= 80 ? '' : 'alert') + '">' + coverage + '%</span><span class="label">traceability</span></div>';
+      html += '<div class="health-metric-sep" aria-hidden="true"></div>';
+      html += '<div class="health-metric" role="button" tabindex="0" aria-pressed="false" data-filter="all" aria-label="' + coverage + '% traceability coverage"><span class="count ' + (coverage === 100 ? 'ok' : coverage >= 80 ? '' : 'alert') + '">' + coverage + '%</span><span class="label">traceability</span></div>';
 
       bar.innerHTML = html;
 
       // Wire health metric click → filter hot spots
+      function activateFilter(el) {
+        const filter = el.dataset.filter;
+        const wasActive = el.classList.contains('active');
+        bar.querySelectorAll('.health-metric').forEach(m => {
+          m.classList.remove('active');
+          m.setAttribute('aria-pressed', 'false');
+        });
+        if (!wasActive && filter !== 'all') {
+          el.classList.add('active');
+          el.setAttribute('aria-pressed', 'true');
+          hotspotFilter = filter;
+          announce('Filtering: ' + el.getAttribute('aria-label'));
+        } else {
+          hotspotFilter = null;
+          announce('Filter cleared');
+        }
+        updateVisibility();
+      }
+
       bar.querySelectorAll('.health-metric[data-filter]').forEach(el => {
-        el.addEventListener('click', () => {
-          const filter = el.dataset.filter;
-          const wasActive = el.classList.contains('active');
-          bar.querySelectorAll('.health-metric').forEach(m => m.classList.remove('active'));
-          if (!wasActive && filter !== 'all') {
-            el.classList.add('active');
-            hotspotFilter = filter;
-          } else {
-            hotspotFilter = null;
+        el.addEventListener('click', () => activateFilter(el));
+        el.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            activateFilter(el);
           }
-          updateVisibility();
         });
       });
     })();
+
+    // Screen reader announcements
+    function announce(message) {
+      const el = document.getElementById('sr-announcer');
+      if (el) { el.textContent = ''; requestAnimationFrame(() => { el.textContent = message; }); }
+    }
 
     let hotspotFilter = null;
 
@@ -1060,14 +1161,17 @@ export function renderGraphHtml(graphData, options = {}) {
     nodeElements.append("text")
       .attr("class", "node-id")
       .attr("dy", d => (d._radius || 22) + 13)
-      .text(d => d.id);
+      .text(d => (d.id || '').substring(0, 20));
 
-    // Node label text (with word wrap)
+    // Node label text (with word wrap, max 3 lines to prevent overflow)
     nodeElements.each(function(d) {
       const group = d3.select(this);
-      const words = d.label.split(/\\s+/);
+      const label = (d.label || '').substring(0, 80); // Truncate very long labels
+      const words = label.split(/\s+/).filter(Boolean);
+      if (words.length === 0) return;
       const maxWidth = 120;
       const lineHeight = 1.1;
+      const maxLines = 3;
       const lines = [];
       let line = [];
 
@@ -1078,9 +1182,14 @@ export function renderGraphHtml(graphData, options = {}) {
           line.pop();
           lines.push(line.join(" "));
           line = [word];
+          if (lines.length >= maxLines) break;
         }
       }
-      if (line.length > 0) lines.push(line.join(" "));
+      if (line.length > 0 && lines.length < maxLines) lines.push(line.join(" "));
+      // Add ellipsis if truncated
+      if (lines.length >= maxLines && words.length > lines.join(" ").split(/\s+/).length) {
+        lines[lines.length - 1] = lines[lines.length - 1].substring(0, 18) + '…';
+      }
 
       const text = group.append("text")
         .attr("class", "node-label")
@@ -1445,8 +1554,14 @@ export function renderGraphHtml(graphData, options = {}) {
     function openModal() {
       specModal.classList.add("active");
       renderModalTab("examples");
+      // Focus the close button for keyboard users
+      setTimeout(() => document.getElementById("modal-close").focus(), 100);
     }
-    function closeModal() { specModal.classList.remove("active"); }
+    function closeModal() {
+      specModal.classList.remove("active");
+      // Return focus to the trigger button
+      document.getElementById("spec-btn").focus();
+    }
     function renderModalTab(tab) {
       document.querySelectorAll(".modal-tab").forEach(t => t.classList.toggle("active", t.dataset.tab === tab));
       modalBody.innerHTML = modalTabs[tab]();
@@ -1462,6 +1577,13 @@ export function renderGraphHtml(graphData, options = {}) {
     document.getElementById("spec-btn").addEventListener("click", openModal);
     document.getElementById("modal-close").addEventListener("click", closeModal);
     specModal.addEventListener("click", (e) => { if (e.target === specModal) closeModal(); });
+    // Escape key closes modal
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && specModal.classList.contains("active")) {
+        e.preventDefault();
+        closeModal();
+      }
+    });
     document.querySelectorAll(".modal-tab").forEach(tab => {
       tab.addEventListener("click", () => renderModalTab(tab.dataset.tab));
     });

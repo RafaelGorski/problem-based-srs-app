@@ -139,3 +139,97 @@ describe("renderGraphHtml", () => {
     assert.ok(html.includes("polygonHull"));
   });
 });
+
+describe("renderGraphHtml - Hardening", () => {
+  it("handles empty nodes array gracefully", () => {
+    const html = renderGraphHtml({ nodes: [], links: [] });
+    assert.ok(html.includes("<!DOCTYPE html>"));
+    assert.ok(html.includes("empty"));
+  });
+
+  it("escapes HTML special characters in title", () => {
+    const html = renderGraphHtml(
+      { nodes: [{ id: "CP-1", type: "problem", label: "Test", data: {} }], links: [] },
+      { title: '<script>alert("xss")</script>' }
+    );
+    assert.ok(!html.includes('<script>alert'));
+    assert.ok(html.includes('&lt;script&gt;'));
+  });
+
+  it("handles nodes with very long labels", () => {
+    const longLabel = "A".repeat(200);
+    const html = renderGraphHtml({
+      nodes: [{ id: "CP-1", type: "problem", label: longLabel, data: {} }],
+      links: []
+    });
+    assert.ok(html.includes("<!DOCTYPE html>"));
+    // Should not crash
+    assert.ok(html.length > 1000);
+  });
+
+  it("handles nodes with emoji in labels", () => {
+    const html = renderGraphHtml({
+      nodes: [{ id: "CP-1", type: "problem", label: "🚀 Rocket Feature 🎉", data: {} }],
+      links: []
+    });
+    assert.ok(html.includes("🚀"));
+    assert.ok(html.includes("🎉"));
+  });
+
+  it("handles nodes with special characters in IDs", () => {
+    const html = renderGraphHtml({
+      nodes: [{ id: "CP-1/α", type: "problem", label: "Greek", data: {} }],
+      links: []
+    });
+    assert.ok(html.includes("<!DOCTYPE html>"));
+  });
+
+  it("includes ARIA roles on health bar", () => {
+    const html = renderGraphHtml({
+      nodes: [
+        { id: "CP-1", type: "problem", label: "P1", data: {} },
+        { id: "CN-1", type: "need", label: "N1", data: {} }
+      ],
+      links: [{ source: "CP-1", target: "CN-1", type: "addresses" }]
+    });
+    assert.ok(html.includes('role="toolbar"'));
+    assert.ok(html.includes('aria-label="Specification health metrics"'));
+  });
+
+  it("includes reduced-motion media query", () => {
+    const html = renderGraphHtml({
+      nodes: [{ id: "CP-1", type: "problem", label: "Test", data: {} }],
+      links: []
+    });
+    assert.ok(html.includes("prefers-reduced-motion"));
+    assert.ok(html.includes("transition-duration: 0.01ms"));
+  });
+
+  it("includes sr-only class and live region", () => {
+    const html = renderGraphHtml({
+      nodes: [{ id: "CP-1", type: "problem", label: "Test", data: {} }],
+      links: []
+    });
+    assert.ok(html.includes("sr-only"));
+    assert.ok(html.includes('id="sr-announcer"'));
+    assert.ok(html.includes('aria-live="assertive"'));
+  });
+
+  it("includes empty state guard for invalid graph data", () => {
+    const html = renderGraphHtml({
+      nodes: [{ id: "CP-1", type: "problem", label: "Test", data: {} }],
+      links: []
+    });
+    // Should have the guard code in the script
+    assert.ok(html.includes("No valid specification data"));
+    assert.ok(html.includes("Specification is empty"));
+  });
+
+  it("handles links referencing nonexistent nodes without crashing", () => {
+    const html = renderGraphHtml({
+      nodes: [{ id: "CP-1", type: "problem", label: "Only node", data: {} }],
+      links: [{ source: "CP-1", target: "NONEXISTENT", type: "addresses" }]
+    });
+    assert.ok(html.includes("<!DOCTYPE html>"));
+  });
+});
