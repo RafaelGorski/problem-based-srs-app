@@ -661,6 +661,68 @@ const session = await joinSession({
                                 return;
                             }
 
+                            // Action bar invoke-skill route (needed after graph loads via load_specification)
+                            if (req.url === "/api/invoke-skill" && req.method === "POST") {
+                                let body = "";
+                                req.on("data", (chunk) => { body += chunk; });
+                                req.on("end", async () => {
+                                    try {
+                                        const action = JSON.parse(body);
+                                        const actionId = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+
+                                        let skillContent = "";
+                                        try {
+                                            const skillDef = SKILLS.find(s => s.name === action.skill);
+                                            if (skillDef) {
+                                                skillContent = await readFile(resolve(skillsDir, skillDef.file), "utf-8");
+                                            }
+                                        } catch { /* non-fatal */ }
+
+                                        const prompt = [
+                                            `## SRS Navigator Action: ${action.action}`,
+                                            `**Skill:** ${action.skill}`,
+                                            `**Node:** ${action.nodeId} (${action.nodeType}) — "${action.nodeLabel}"`,
+                                            `**Context:** ${action.context}`,
+                                            "",
+                                            "Use the `" + action.skill + "` tool with the context above to process this request.",
+                                            "After generating the result, use the `load_specification` canvas action to update the graph if the specification changes.",
+                                        ].join("\n");
+
+                                        await session.send({ prompt });
+
+                                        if (!pendingActions.has(ctx.instanceId)) {
+                                            pendingActions.set(ctx.instanceId, []);
+                                        }
+                                        pendingActions.get(ctx.instanceId).push({
+                                            id: actionId,
+                                            timestamp: new Date().toISOString(),
+                                            status: "sent",
+                                            ...action,
+                                        });
+
+                                        res.setHeader("Content-Type", "application/json");
+                                        res.end(JSON.stringify({ ok: true, sent: true, actionId }));
+                                    } catch (e) {
+                                        const isJsonError = e instanceof SyntaxError;
+                                        res.statusCode = isJsonError ? 400 : 500;
+                                        res.setHeader("Content-Type", "application/json");
+                                        res.end(JSON.stringify({
+                                            ok: false,
+                                            error: isJsonError ? "Invalid JSON" : "Failed to send to agent",
+                                            detail: e.message,
+                                        }));
+                                    }
+                                });
+                                return;
+                            }
+
+                            if (req.url === "/api/pending-actions") {
+                                res.setHeader("Content-Type", "application/json");
+                                const queue = pendingActions.get(ctx.instanceId) || [];
+                                res.end(JSON.stringify({ actions: queue }));
+                                return;
+                            }
+
                             if (req.url === "/api/state") {
                                 res.setHeader("Content-Type", "application/json");
                                 res.end(JSON.stringify({
