@@ -2083,6 +2083,380 @@ export function renderGraphHtml(graphData, options = {}) {
 </html>`;
 }
 
+/**
+ * Render the landing page shown when no specification is loaded.
+ * Centered content describing the extension, with Load Demo and Learn actions.
+ */
+export function renderLandingHtml() {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>SRS Navigator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --background: oklch(0.98 0 0);
+      --foreground: oklch(0.15 0.02 240);
+      --card: oklch(1 0 0);
+      --primary: oklch(0.35 0.12 265);
+      --primary-foreground: oklch(0.98 0 0);
+      --accent: oklch(0.55 0.15 200);
+      --muted-foreground: oklch(0.40 0.02 240);
+      --border: oklch(0.87 0.01 240);
+      --hover: oklch(0.95 0.005 240);
+      --node-problem: oklch(0.65 0.19 50);
+      --node-need: oklch(0.60 0.15 200);
+      --node-fr: oklch(0.55 0.18 265);
+      --node-nfr: oklch(0.68 0.15 330);
+      --radius: 8px;
+      --space-xs: 4px;
+      --space-sm: 8px;
+      --space-md: 12px;
+      --space-lg: 16px;
+      --space-xl: 24px;
+      --space-2xl: 32px;
+      --transition-fast: 0.15s ease-out;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Space Grotesk', system-ui, -apple-system, sans-serif;
+      background: var(--background);
+      color: var(--foreground);
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: auto;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+
+    :focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+    :focus:not(:focus-visible) { outline: none; }
+
+    .landing {
+      max-width: 520px;
+      width: 100%;
+      padding: var(--space-2xl) var(--space-xl);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: var(--space-2xl);
+    }
+
+    /* Header */
+    .landing-header {
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: var(--space-lg);
+    }
+    .landing-icon {
+      width: 56px;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 12px;
+      background: var(--primary);
+      color: var(--primary-foreground);
+    }
+    .landing-icon svg { width: 28px; height: 28px; }
+    .landing-header h1 {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      line-height: 1.2;
+      color: var(--foreground);
+    }
+    .landing-header p {
+      font-size: 14px;
+      line-height: 1.65;
+      color: var(--muted-foreground);
+      max-width: 420px;
+      text-wrap: pretty;
+    }
+
+    /* Actions */
+    .landing-actions {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-md);
+      width: 100%;
+      max-width: 340px;
+    }
+    .action-btn {
+      display: flex;
+      align-items: center;
+      gap: var(--space-md);
+      width: 100%;
+      padding: var(--space-lg);
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      background: var(--card);
+      color: var(--foreground);
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 500;
+      text-align: left;
+      cursor: pointer;
+      transition: background var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast);
+    }
+    .action-btn:hover {
+      background: var(--hover);
+      border-color: oklch(0.78 0.02 240);
+    }
+    .action-btn:active {
+      transform: scale(0.985);
+    }
+    .action-btn.primary {
+      background: var(--primary);
+      color: var(--primary-foreground);
+      border-color: var(--primary);
+    }
+    .action-btn.primary:hover {
+      background: oklch(0.30 0.12 265);
+      border-color: oklch(0.30 0.12 265);
+    }
+    .action-icon {
+      width: 36px;
+      height: 36px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 8px;
+      background: oklch(0.95 0.01 240);
+    }
+    .action-btn.primary .action-icon {
+      background: oklch(0.28 0.10 265);
+    }
+    .action-icon svg { width: 18px; height: 18px; }
+    .action-text {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 0;
+    }
+    .action-text .label {
+      font-weight: 600;
+      font-size: 13px;
+      line-height: 1.3;
+    }
+    .action-text .desc {
+      font-size: 12px;
+      font-weight: 400;
+      color: var(--muted-foreground);
+      line-height: 1.4;
+    }
+    .action-btn.primary .action-text .desc {
+      color: oklch(0.80 0.03 265);
+    }
+
+    /* Features */
+    .features {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-md);
+    }
+    .features-heading {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted-foreground);
+      padding: 0 var(--space-xs);
+    }
+    .feature-list {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: var(--space-sm);
+    }
+    .feature-item {
+      display: flex;
+      align-items: flex-start;
+      gap: var(--space-sm);
+      padding: var(--space-md);
+      border-radius: 6px;
+      background: var(--card);
+      border: 1px solid var(--border);
+    }
+    .feature-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      margin-top: 4px;
+    }
+    .feature-item:nth-child(1) .feature-dot { background: var(--node-problem); }
+    .feature-item:nth-child(2) .feature-dot { background: var(--node-need); }
+    .feature-item:nth-child(3) .feature-dot { background: var(--node-fr); }
+    .feature-item:nth-child(4) .feature-dot { background: var(--node-nfr); }
+    .feature-item:nth-child(5) .feature-dot { background: var(--accent); }
+    .feature-item:nth-child(6) .feature-dot { background: var(--primary); }
+    .feature-text {
+      font-size: 12px;
+      font-weight: 500;
+      line-height: 1.4;
+      color: var(--foreground);
+    }
+
+    /* Loading state */
+    .action-btn.loading {
+      pointer-events: none;
+      opacity: 0.7;
+    }
+    .action-btn.loading .action-icon {
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+  </style>
+</head>
+<body>
+  <main class="landing" role="main" aria-label="SRS Navigator welcome">
+    <div class="landing-header">
+      <div class="landing-icon" aria-hidden="true">
+        <svg viewBox="0 0 256 256" fill="currentColor"><path d="M208,32H48A16,16,0,0,0,32,48V208a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V48A16,16,0,0,0,208,32ZM172.27,96,128,154.16,83.73,96ZM48,48H208V80.24L136.62,170.06a12,12,0,0,1-17.24,0L48,80.24Zm0,160V105.76l60,73.5a28,28,0,0,0,40,0l60-73.5V208Z"/></svg>
+      </div>
+      <h1>SRS Navigator</h1>
+      <p>Visualize and navigate Problem-Based SRS specifications as interactive force-directed graphs. Trace how customer problems flow through needs into functional and non-functional requirements.</p>
+    </div>
+
+    <div class="landing-actions">
+      <button class="action-btn primary" id="btn-learn" aria-label="Create a specification from your project">
+        <span class="action-icon" aria-hidden="true">
+          <svg viewBox="0 0 256 256" fill="currentColor"><path d="M232,128a8,8,0,0,1-8,8H136v88a8,8,0,0,1-16,0V136H32a8,8,0,0,1,0-16h88V32a8,8,0,0,1,16,0v88h88A8,8,0,0,1,232,128Z"/></svg>
+        </span>
+        <span class="action-text">
+          <span class="label">Learn &amp; Create Spec</span>
+          <span class="desc">Scan your project and generate a Problem-Based SRS specification</span>
+        </span>
+      </button>
+      <button class="action-btn" id="btn-demo" aria-label="Load a demo specification to explore features">
+        <span class="action-icon" aria-hidden="true">
+          <svg viewBox="0 0 256 256" fill="currentColor"><path d="M208,24H72A32,32,0,0,0,40,56V224a8,8,0,0,0,8,8H192a8,8,0,0,0,0-16H56a16,16,0,0,1,16-16H208a8,8,0,0,0,8-8V32A8,8,0,0,0,208,24Zm-8,160H72a31.82,31.82,0,0,0-16,4.29V56A16,16,0,0,1,72,40H200Z"/></svg>
+        </span>
+        <span class="action-text">
+          <span class="label">Load Demo</span>
+          <span class="desc">Explore a sample CRM specification to see the graph in action</span>
+        </span>
+      </button>
+      <button class="action-btn" id="btn-load" aria-label="Load an existing specification file">
+        <span class="action-icon" aria-hidden="true">
+          <svg viewBox="0 0 256 256" fill="currentColor"><path d="M213.66,82.34l-56-56A8,8,0,0,0,152,24H56A16,16,0,0,0,40,40V216a16,16,0,0,0,16,16H200a16,16,0,0,0,16-16V88A8,8,0,0,0,213.66,82.34ZM160,51.31,188.69,80H160ZM200,216H56V40h88V88a8,8,0,0,0,8,8h48V216Z"/></svg>
+        </span>
+        <span class="action-text">
+          <span class="label">Load Specification</span>
+          <span class="desc">Open an existing .spec JSON file from your workspace</span>
+        </span>
+      </button>
+    </div>
+
+    <div class="features">
+      <div class="features-heading">Capabilities</div>
+      <div class="feature-list">
+        <div class="feature-item">
+          <span class="feature-dot" aria-hidden="true"></span>
+          <span class="feature-text">Force-directed graph visualization</span>
+        </div>
+        <div class="feature-item">
+          <span class="feature-dot" aria-hidden="true"></span>
+          <span class="feature-text">Traceability from problems to requirements</span>
+        </div>
+        <div class="feature-item">
+          <span class="feature-dot" aria-hidden="true"></span>
+          <span class="feature-text">Analysis modes for focused views</span>
+        </div>
+        <div class="feature-item">
+          <span class="feature-dot" aria-hidden="true"></span>
+          <span class="feature-text">Node detail panel with connections</span>
+        </div>
+        <div class="feature-item">
+          <span class="feature-dot" aria-hidden="true"></span>
+          <span class="feature-text">Search and filter across all node types</span>
+        </div>
+        <div class="feature-item">
+          <span class="feature-dot" aria-hidden="true"></span>
+          <span class="feature-text">Agent-driven spec generation</span>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const btnLearn = document.getElementById('btn-learn');
+    const btnDemo = document.getElementById('btn-demo');
+    const btnLoad = document.getElementById('btn-load');
+
+    function setLoading(btn, loading) {
+      btn.classList.toggle('loading', loading);
+      btn.disabled = loading;
+    }
+
+    btnLearn.addEventListener('click', async () => {
+      setLoading(btnLearn, true);
+      try {
+        const res = await fetch('/api/landing-action', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'learn' })
+        });
+        const data = await res.json();
+        if (!data.ok) setLoading(btnLearn, false);
+      } catch { setLoading(btnLearn, false); }
+    });
+
+    btnDemo.addEventListener('click', async () => {
+      setLoading(btnDemo, true);
+      try {
+        const res = await fetch('/api/landing-action', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'demo' })
+        });
+        const data = await res.json();
+        if (data.ok && data.reload) {
+          window.location.reload();
+        } else {
+          setLoading(btnDemo, false);
+        }
+      } catch { setLoading(btnDemo, false); }
+    });
+
+    btnLoad.addEventListener('click', async () => {
+      setLoading(btnLoad, true);
+      try {
+        const res = await fetch('/api/landing-action', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'load' })
+        });
+        const data = await res.json();
+        if (!data.ok) setLoading(btnLoad, false);
+      } catch { setLoading(btnLoad, false); }
+    });
+  <\/script>
+</body>
+</html>`;
+}
+
 function escapeHtml(str) {
   if (!str) return '';
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
