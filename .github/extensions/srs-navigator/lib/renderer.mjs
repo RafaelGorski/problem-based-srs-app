@@ -820,6 +820,65 @@ export function renderGraphHtml(graphData, options = {}) {
     }
     .toast-dismiss:hover { color: oklch(0.80 0.02 265); }
 
+    /* Error detail modal */
+    .error-modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: oklch(0 0 0 / 0.45);
+      z-index: 500;
+      justify-content: center;
+      align-items: center;
+    }
+    .error-modal-overlay.active { display: flex; }
+    .error-modal {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: 0 8px 32px oklch(0 0 0 / 0.18);
+      max-width: 520px;
+      width: 90%;
+      max-height: 70vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .error-modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: var(--space-md) var(--space-lg);
+      border-bottom: 1px solid var(--border);
+    }
+    .error-modal-header h3 {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 600;
+      color: oklch(0.60 0.22 25);
+    }
+    .error-modal-close {
+      background: none;
+      border: none;
+      font-size: 20px;
+      cursor: pointer;
+      color: var(--muted);
+      line-height: 1;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+    .error-modal-close:hover { background: var(--hover); color: var(--foreground); }
+    .error-modal-body {
+      padding: var(--space-lg);
+      margin: 0;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      line-height: 1.6;
+      color: var(--foreground);
+      overflow: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
     /* Responsive: narrow widths */
     @media (max-width: 720px) {
       .title-section h1 { font-size: 18px; }
@@ -1202,6 +1261,17 @@ export function renderGraphHtml(graphData, options = {}) {
     <span id="toast-text"></span>
     <a class="toast-detail" id="toast-detail" style="display:none"></a>
     <span class="toast-dismiss" id="toast-dismiss" title="Dismiss">&times;</span>
+  </div>
+
+  <!-- Error detail modal -->
+  <div class="error-modal-overlay" id="error-modal-overlay">
+    <div class="error-modal" role="dialog" aria-labelledby="error-modal-title" aria-modal="true">
+      <div class="error-modal-header">
+        <h3 id="error-modal-title">Action Error Details</h3>
+        <button class="error-modal-close" id="error-modal-close" aria-label="Close">&times;</button>
+      </div>
+      <pre class="error-modal-body" id="error-modal-body"></pre>
+    </div>
   </div>
 
   <!-- Action bar: appears on node hover -->
@@ -1737,7 +1807,27 @@ export function renderGraphHtml(graphData, options = {}) {
       }).then(async res => {
         const data = await res.json().catch(() => ({}));
         if (res.ok && data.ok) {
-          showToast("✓ Agent received: " + skillName + " → processing " + node.id);
+          showToast("⏳ Agent processing: " + skillName + " → " + node.id + "...", { variant: "pending", persistent: true });
+          // Poll for spec changes and auto-refresh when agent finishes
+          let polls = 0;
+          const maxPolls = 120; // ~2 minutes at 1s intervals
+          const pollInterval = setInterval(async () => {
+            polls++;
+            if (polls > maxPolls) {
+              clearInterval(pollInterval);
+              showToast("✓ Action sent — refresh manually when ready");
+              return;
+            }
+            try {
+              const checkRes = await fetch("/api/refresh-spec");
+              const checkData = await checkRes.json().catch(() => ({}));
+              if (checkData.refreshed) {
+                clearInterval(pollInterval);
+                showToast("✓ Spec updated — reloading graph...");
+                setTimeout(() => window.location.reload(), 500);
+              }
+            } catch { /* keep polling */ }
+          }, 1000);
         } else {
           showToast("⚠ Failed to reach agent", {
             variant: "error",
@@ -2196,8 +2286,11 @@ export function renderGraphHtml(graphData, options = {}) {
         toastDetail.textContent = "Show details";
         toastDetail.title = opts.detail;
         toastDetail.style.display = "inline";
-        toastDetail.onclick = () => {
-          alert("Action Error Details:\\n\\n" + opts.detail);
+        toastDetail.onclick = (e) => {
+          e.preventDefault();
+          const overlay = document.getElementById("error-modal-overlay");
+          document.getElementById("error-modal-body").textContent = opts.detail;
+          overlay.classList.add("active");
         };
       } else {
         toastDetail.style.display = "none";
@@ -2215,6 +2308,18 @@ export function renderGraphHtml(graphData, options = {}) {
     document.getElementById("toast-dismiss").addEventListener("click", () => {
       clearTimeout(toastAutoTimer);
       document.getElementById("toast").classList.remove("show");
+    });
+
+    // Error modal close handlers
+    function closeErrorModal() {
+      document.getElementById("error-modal-overlay").classList.remove("active");
+    }
+    document.getElementById("error-modal-close").addEventListener("click", closeErrorModal);
+    document.getElementById("error-modal-overlay").addEventListener("click", (e) => {
+      if (e.target === e.currentTarget) closeErrorModal();
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") closeErrorModal();
     });
 
     // Show toast on load if it's the demo
