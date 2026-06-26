@@ -1,12 +1,16 @@
 # Problem-Based SRS Navigator — Canvas Extension
 
-An interactive force-directed graph visualization for **Problem-Based SRS** specifications, packaged as a [GitHub Copilot](https://github.com/features/copilot) canvas extension.
+An interactive force-directed graph visualization for **Problem-Based SRS** specifications, packaged as a [GitHub Copilot](https://github.com/features/copilot) canvas extension — plus the **full Problem-Based SRS methodology as built-in tools**.
 
 ![SRS Navigator Screenshot](.github/extensions/srs-navigator/docs/screenshot.png)
 
 ## What is this?
 
-This repository contains a **GitHub Copilot canvas extension** that renders Problem-Based SRS (Software Requirements Specification) documents as an interactive, navigable graph. It visualizes the relationships between:
+This repository contains a **GitHub Copilot canvas extension** that provides two things:
+
+### 1. Interactive Graph Visualization (Canvas)
+
+Renders Problem-Based SRS (Software Requirements Specification) documents as an interactive, navigable graph. It visualizes the relationships between:
 
 - **Customer Problems (CP)** — pain points driving the system
 - **Customer Needs (CN)** — what users need to solve those problems
@@ -15,11 +19,29 @@ This repository contains a **GitHub Copilot canvas extension** that renders Prob
 
 Engineers can explore traceability (problem → need → requirement), filter by analysis mode, search nodes, and inspect detailed dependencies — all inside the Copilot side panel without leaving their editor.
 
+### 2. Problem-Based SRS Methodology Skills (Tools)
+
+The extension bundles all **9 methodology skills** from [Problem-Based SRS](https://github.com/RafaelGorski/Problem-Based-SRS) as agent tools. Once installed, engineers can invoke any step of the methodology directly:
+
+| Tool | Step | Purpose |
+|------|------|---------|
+| `business_context` | 0 | Establish business context and project principles |
+| `customer_problems` | 1 | Identify and document customer problems |
+| `software_glance` | 2 | Create high-level solution view |
+| `customer_needs` | 3 | Specify what outcomes software must provide |
+| `software_vision` | 4 | Define software vision with features and architecture |
+| `functional_requirements` | 5 | Generate functional and non-functional requirements |
+| `problem_based_srs` | — | Full methodology orchestrator |
+| `zigzag_validator` | — | Validate traceability across domains |
+| `complexity_analysis` | — | Axiomatic Design quality analysis (optional) |
+
+Each tool accepts an optional `context` parameter with existing artifacts, making it easy to iterate on individual steps (e.g., add a new customer problem, refine needs, or generate additional requirements).
+
 ## Architecture
 
 ```
 .github/extensions/srs-navigator/
-├── extension.mjs              # Entry point — canvas + 5 agent actions
+├── extension.mjs              # Entry point — canvas + 9 methodology tools
 ├── copilot-extension.json     # Manifest for gist sharing
 ├── README.md                  # Extension-specific docs
 ├── docs/
@@ -29,6 +51,16 @@ Engineers can explore traceability (problem → need → requirement), filter by
 │   ├── validation.mjs         # Schema + reference integrity validation
 │   ├── renderer.mjs           # Self-contained HTML renderer (D3.js + CSS)
 │   └── demo-spec.mjs          # Built-in CRM System demo data
+├── skills/                    # Bundled Problem-Based SRS methodology
+│   ├── business-context.md    # Step 0: Business context
+│   ├── customer-problems.md   # Step 1: Customer problems
+│   ├── software-glance.md     # Step 2: Software glance
+│   ├── customer-needs.md      # Step 3: Customer needs
+│   ├── software-vision.md     # Step 4: Software vision
+│   ├── functional-requirements.md  # Step 5: Requirements
+│   ├── problem-based-srs.md   # Full orchestrator
+│   ├── zigzag-validator.md    # Traceability validation
+│   └── complexity-analysis.md # Axiomatic Design analysis
 └── tests/
     ├── parser.test.mjs        # 16 tests
     ├── validation.test.mjs    # 19 tests
@@ -146,6 +178,31 @@ Provide a Problem-Based SRS JSON file:
 | `inspect_node` | Get full details for a node by ID |
 | `get_summary` | Node/link counts for the loaded spec |
 | `search_nodes` | Search by ID or label text |
+
+### Using the Methodology Skills
+
+The bundled skills let you run any step of the Problem-Based SRS methodology directly through the agent. Simply ask naturally or invoke the tool:
+
+```
+Help me identify customer problems for my inventory management system
+```
+
+```
+I have these customer problems: [...]. Generate customer needs from them.
+```
+
+```
+Validate traceability between my CPs, CNs, and FRs
+```
+
+You can also iterate on individual artifacts — e.g., adding a new customer problem to an existing specification:
+
+```
+I need to add a new customer problem about data privacy compliance.
+Here's my existing spec: [paste or file path]
+```
+
+Each tool returns the full methodology instructions, enabling the agent to follow the structured process (notation, classification, validation checklists) while generating your artifacts.
 
 ## Development
 
