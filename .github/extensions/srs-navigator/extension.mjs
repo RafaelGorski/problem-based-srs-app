@@ -1,6 +1,7 @@
 // Extension: srs-navigator
 // Problem-Based SRS Navigator - Interactive graph visualization for software
 // requirements specifications structured using the Problem-Based SRS methodology.
+// Also provides Problem-Based SRS methodology skills as tools.
 
 import { createServer } from "node:http";
 import { readFile, readdir } from "node:fs/promises";
@@ -12,9 +13,92 @@ import { parseSpecificationData, buildGraphData, convertJSONToSpecificationData 
 import { validateSpecificationJSON, validateReferenceIntegrity } from "./lib/validation.mjs";
 import { renderGraphHtml } from "./lib/renderer.mjs";
 import { DEMO_SPEC } from "./lib/demo-spec.mjs";
+import { backgroundSync } from "./lib/skills-sync.mjs";
+
+// Skills directory path
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const skillsDir = resolve(__dirname, "skills");
+
+// Skill definitions for tool registration
+const SKILLS = [
+    {
+        name: "business_context",
+        file: "business-context.md",
+        description: "Step 0: Establish structured business context and project principles before problem discovery. Use when starting requirements engineering to capture project identity, business principles, stakeholders, domain boundaries, and success criteria.",
+    },
+    {
+        name: "customer_problems",
+        file: "customer-problems.md",
+        description: "Step 1: Identify and document Customer Problems (CP) from business context. Use when stakeholders describe solutions instead of problems, or when starting requirements engineering.",
+    },
+    {
+        name: "software_glance",
+        file: "software-glance.md",
+        description: "Step 2: Create the first abstract representation of a software solution from Customer Problems. Use after identifying CPs to design high-level system boundaries and components.",
+    },
+    {
+        name: "customer_needs",
+        file: "customer-needs.md",
+        description: "Step 3: Specify Customer Needs (CN) that define WHAT outcomes software must provide to solve Customer Problems. Use after Software Glance to translate problems into needs.",
+    },
+    {
+        name: "software_vision",
+        file: "software-vision.md",
+        description: "Step 4: Transform Software Glance and Customer Needs into a detailed Software Vision with positioning, stakeholders, features, and architecture.",
+    },
+    {
+        name: "functional_requirements",
+        file: "functional-requirements.md",
+        description: "Step 5: Generate Functional Requirements (FR) and Non-Functional Requirements (NFR) from Customer Needs and Software Vision. Creates individual requirement files with traceability.",
+    },
+    {
+        name: "complexity_analysis",
+        file: "complexity-analysis.md",
+        description: "Optional: Analyze specification quality using Axiomatic Design principles. Evaluates independence, completeness, and information content of requirements.",
+    },
+    {
+        name: "problem_based_srs",
+        file: "problem-based-srs.md",
+        description: "Complete Problem-Based SRS methodology orchestrator. Use when you need to perform full requirements engineering from business problems to functional requirements with traceability.",
+    },
+    {
+        name: "zigzag_validator",
+        file: "zigzag-validator.md",
+        description: "Validate traceability and consistency across Customer Problems, Customer Needs, and Functional Requirements domains. Use to check completeness and identify gaps.",
+    },
+];
+
+// Build tools array from skill definitions
+function buildSkillTools() {
+    return SKILLS.map((skill) => ({
+        name: skill.name,
+        description: skill.description,
+        parameters: {
+            type: "object",
+            properties: {
+                context: {
+                    type: "string",
+                    description: "Optional: existing artifacts or business context to provide as input for this methodology step.",
+                },
+            },
+        },
+        handler: async (args) => {
+            const skillPath = resolve(skillsDir, skill.file);
+            const content = await readFile(skillPath, "utf-8");
+            let result = content;
+            if (args.context) {
+                result += `\n\n---\n\n## User-Provided Context\n\n${args.context}`;
+            }
+            return result;
+        },
+    }));
+}
 
 // Per-instance state: server + loaded graph data
 const instances = new Map();
+
+// Pending action queues per instance (browser → agent communication)
+const pendingActions = new Map();
 
 async function startServer(instanceId, graphData, specName) {
     const html = renderGraphHtml(graphData, { title: specName });
@@ -80,6 +164,7 @@ async function loadFromSpecFolder(workspacePath) {
 }
 
 const session = await joinSession({
+    tools: buildSkillTools(),
     canvases: [
         createCanvas({
             id: "srs-navigator",
@@ -274,6 +359,41 @@ const session = await joinSession({
                             }))
                         };
                     }
+                },
+                {
+                    name: "pending_actions",
+                    description: "Retrieve and consume pending actions queued from the canvas UI. When an engineer clicks an action button on a node (e.g., +CN, +FR, +NFR, decompose), the action is queued here with the skill name and context. The agent should invoke the corresponding skill tool with the provided context. Returns the queue and clears it.",
+                    handler: async (ctx) => {
+                        const queue = pendingActions.get(ctx.instanceId) || [];
+                        // Clear the queue after retrieval
+                        pendingActions.set(ctx.instanceId, []);
+
+                        if (queue.length === 0) {
+                            return { actions: [], message: "No pending actions" };
+                        }
+
+                        // Enrich each action with skill instructions
+                        const enriched = await Promise.all(queue.map(async (action) => {
+                            let skillContent = "";
+                            try {
+                                const skillFile = SKILLS.find(s => s.name === action.skill)?.file;
+                                if (skillFile) {
+                                    skillContent = await readFile(resolve(skillsDir, skillFile), "utf-8");
+                                }
+                            } catch { /* skill file read failure is non-fatal */ }
+
+                            return {
+                                ...action,
+                                instruction: `Use the "${action.skill}" methodology skill to process this action. Context:\n\n${action.context}`,
+                                skillContent,
+                            };
+                        }));
+
+                        return {
+                            actions: enriched,
+                            message: `${enriched.length} action(s) ready. For each action, invoke the specified skill tool with the provided context.`,
+                        };
+                    }
                 }
             ],
             open: async (ctx) => {
@@ -320,6 +440,72 @@ const session = await joinSession({
 
                 const server = createServer((req, res) => {
                     const inst = instances.get(ctx.instanceId);
+
+                    if (req.url === "/api/invoke-skill" && req.method === "POST") {
+                        let body = "";
+                        req.on("data", (chunk) => { body += chunk; });
+                        req.on("end", async () => {
+                            try {
+                                const action = JSON.parse(body);
+                                const actionId = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+
+                                // Read the skill file for context
+                                let skillContent = "";
+                                try {
+                                    const skillDef = SKILLS.find(s => s.name === action.skill);
+                                    if (skillDef) {
+                                        skillContent = await readFile(resolve(skillsDir, skillDef.file), "utf-8");
+                                    }
+                                } catch { /* non-fatal */ }
+
+                                // Build the prompt for the agent
+                                const prompt = [
+                                    `## SRS Navigator Action: ${action.action}`,
+                                    `**Skill:** ${action.skill}`,
+                                    `**Node:** ${action.nodeId} (${action.nodeType}) — "${action.nodeLabel}"`,
+                                    `**Context:** ${action.context}`,
+                                    "",
+                                    "Use the `" + action.skill + "` tool with the context above to process this request.",
+                                    "After generating the result, use the `load_specification` canvas action to update the graph if the specification changes.",
+                                ].join("\n");
+
+                                // Send directly to the agent session
+                                await session.send({ prompt });
+
+                                // Also queue for reference
+                                if (!pendingActions.has(ctx.instanceId)) {
+                                    pendingActions.set(ctx.instanceId, []);
+                                }
+                                pendingActions.get(ctx.instanceId).push({
+                                    id: actionId,
+                                    timestamp: new Date().toISOString(),
+                                    status: "sent",
+                                    ...action,
+                                });
+
+                                res.setHeader("Content-Type", "application/json");
+                                res.end(JSON.stringify({ ok: true, sent: true, actionId }));
+                            } catch (e) {
+                                const isJsonError = e instanceof SyntaxError;
+                                res.statusCode = isJsonError ? 400 : 500;
+                                res.setHeader("Content-Type", "application/json");
+                                res.end(JSON.stringify({
+                                    ok: false,
+                                    error: isJsonError ? "Invalid JSON" : "Failed to send to agent",
+                                    detail: e.message,
+                                }));
+                            }
+                        });
+                        return;
+                    }
+
+                    if (req.url === "/api/pending-actions") {
+                        res.setHeader("Content-Type", "application/json");
+                        const queue = pendingActions.get(ctx.instanceId) || [];
+                        res.end(JSON.stringify({ actions: queue }));
+                        return;
+                    }
+
                     if (req.url === "/api/state") {
                         res.setHeader("Content-Type", "application/json");
                         res.end(JSON.stringify({
@@ -337,12 +523,17 @@ const session = await joinSession({
                 const url = `http://127.0.0.1:${server.address().port}/`;
 
                 instances.set(ctx.instanceId, { server, url, html, graphData, specName });
+
+                // Trigger background skills sync (non-blocking)
+                backgroundSync(skillsDir, (msg) => session.log(msg)).catch(() => {});
+
                 return { title: `SRS: ${specName}`, url };
             },
             onClose: async (ctx) => {
                 const entry = instances.get(ctx.instanceId);
                 if (entry) {
                     instances.delete(ctx.instanceId);
+                    pendingActions.delete(ctx.instanceId);
                     await new Promise((r) => entry.server.close(() => r()));
                 }
             },
@@ -364,3 +555,6 @@ function summarizeGraph(graphData) {
         nonFunctionalRequirements: types.nfr
     };
 }
+
+// Trigger background skills sync on extension startup
+backgroundSync(skillsDir, (msg) => session.log(msg)).catch(() => {});

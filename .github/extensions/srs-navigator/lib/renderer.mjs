@@ -799,6 +799,26 @@ export function renderGraphHtml(graphData, options = {}) {
     }
     .toast.show { transform: translateY(0); opacity: 1; }
     .toast svg { color: oklch(0.55 0.18 145); flex-shrink: 0; }
+    .toast.toast-pending svg { color: oklch(0.65 0.15 265); }
+    .toast.toast-error svg { color: oklch(0.60 0.22 25); }
+    .toast-detail {
+      font-size: 11px;
+      color: oklch(0.55 0.12 25);
+      cursor: pointer;
+      text-decoration: underline;
+      text-decoration-style: dotted;
+      text-underline-offset: 2px;
+      margin-left: 4px;
+    }
+    .toast-detail:hover { color: oklch(0.70 0.15 25); }
+    .toast-dismiss {
+      margin-left: 8px;
+      cursor: pointer;
+      color: oklch(0.50 0.02 265);
+      font-size: 16px;
+      line-height: 1;
+    }
+    .toast-dismiss:hover { color: oklch(0.80 0.02 265); }
 
     /* Responsive: narrow widths */
     @media (max-width: 720px) {
@@ -808,6 +828,131 @@ export function renderGraphHtml(graphData, options = {}) {
       .search-container { max-width: none; min-width: 100px; }
       .detail-panel { width: 100%; }
       .type-indicators { display: none; }
+    }
+
+    /* Action bar - appears on node hover */
+    .action-bar {
+      position: fixed;
+      display: none;
+      align-items: stretch;
+      height: 36px;
+      background: oklch(0.15 0.008 265);
+      border-radius: 10px;
+      box-shadow: 0 12px 32px -8px oklch(0 0 0 / 0.5), 0 0 0 1px oklch(0.30 0.02 265 / 0.3);
+      z-index: 300;
+      opacity: 0;
+      transform: translateY(6px);
+      transition: opacity 0.15s cubic-bezier(0.22, 1, 0.36, 1), transform 0.15s cubic-bezier(0.22, 1, 0.36, 1);
+      pointer-events: auto;
+      overflow: hidden;
+    }
+    .action-bar.visible {
+      display: flex;
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .action-bar.pinned {
+      box-shadow: 0 0 0 1px oklch(0.45 0.12 265 / 0.6), 0 4px 16px oklch(0 0 0 / 0.4);
+    }
+    .action-bar-input {
+      flex: 1;
+      min-width: 140px;
+      height: 100%;
+      border: none;
+      background: transparent;
+      color: oklch(0.94 0.02 265);
+      font-family: 'Space Grotesk', system-ui, sans-serif;
+      font-size: 12px;
+      font-weight: 400;
+      padding: 0 12px;
+      outline: none;
+    }
+    .action-bar-input::placeholder {
+      color: oklch(0.55 0.02 265);
+    }
+    .action-bar-input:focus::placeholder {
+      color: oklch(0.45 0.02 265);
+    }
+    .action-bar-divider {
+      width: 1px;
+      align-self: stretch;
+      margin: 7px 0;
+      background: oklch(0.30 0.02 265);
+    }
+    .action-bar-actions {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      padding: 0 4px;
+    }
+    .action-bar-btn {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      height: 28px;
+      padding: 0 8px;
+      border: none;
+      border-radius: 6px;
+      background: oklch(0.20 0.015 265);
+      color: oklch(0.75 0.03 265);
+      cursor: pointer;
+      transition: background 0.12s ease, color 0.12s ease;
+      position: relative;
+      font-family: inherit;
+      font-size: 11px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .action-bar-btn:hover {
+      background: oklch(0.28 0.03 265);
+      color: oklch(0.94 0.02 265);
+    }
+    .action-bar-btn:active {
+      background: oklch(0.18 0.03 265);
+    }
+    .action-bar-btn svg {
+      width: 14px;
+      height: 14px;
+      flex-shrink: 0;
+    }
+    .action-bar-btn-label {
+      font-size: 11px;
+      letter-spacing: 0.01em;
+    }
+    .action-bar-btn[title]::after {
+      content: attr(title);
+      position: absolute;
+      bottom: calc(100% + 6px);
+      left: 50%;
+      transform: translateX(-50%);
+      background: oklch(0.10 0.01 265);
+      color: oklch(0.90 0.02 265);
+      font-size: 10px;
+      font-weight: 500;
+      padding: 3px 6px;
+      border-radius: 4px;
+      white-space: nowrap;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.12s ease;
+    }
+    .action-bar-btn:hover[title]::after {
+      opacity: 1;
+    }
+    .action-bar-submit {
+      color: var(--node-fr);
+      width: 28px;
+      padding: 0;
+      justify-content: center;
+      background: transparent;
+    }
+    .action-bar-submit:hover {
+      background: oklch(0.25 0.06 265);
+      color: oklch(0.75 0.18 265);
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .action-bar { transition: none; }
+      .action-bar-btn::after { transition: none; }
     }
   </style>
 </head>
@@ -898,8 +1043,17 @@ export function renderGraphHtml(graphData, options = {}) {
 
   <!-- Toast notification -->
   <div class="toast" id="toast" role="status" aria-live="polite">
-    <svg width="16" height="16" viewBox="0 0 256 256" fill="currentColor"><path d="M173.66,98.34a8,8,0,0,1,0,11.32l-56,56a8,8,0,0,1-11.32,0l-24-24a8,8,0,0,1,11.32-11.32L112,148.69l50.34-50.35A8,8,0,0,1,173.66,98.34ZM232,128A104,104,0,1,1,128,24,104.11,104.11,0,0,1,232,128Zm-16,0a88,88,0,1,0-88,88A88.1,88.1,0,0,0,216,128Z"/></svg>
+    <svg id="toast-icon" width="16" height="16" viewBox="0 0 256 256" fill="currentColor"><path d="M173.66,98.34a8,8,0,0,1,0,11.32l-56,56a8,8,0,0,1-11.32,0l-24-24a8,8,0,0,1,11.32-11.32L112,148.69l50.34-50.35A8,8,0,0,1,173.66,98.34ZM232,128A104,104,0,1,1,128,24,104.11,104.11,0,0,1,232,128Zm-16,0a88,88,0,1,0-88,88A88.1,88.1,0,0,0,216,128Z"/></svg>
     <span id="toast-text"></span>
+    <a class="toast-detail" id="toast-detail" style="display:none"></a>
+    <span class="toast-dismiss" id="toast-dismiss" title="Dismiss">&times;</span>
+  </div>
+
+  <!-- Action bar: appears on node hover -->
+  <div class="action-bar" id="action-bar" role="toolbar" aria-label="Node actions">
+    <input class="action-bar-input" id="action-bar-input" type="text" placeholder="Describe a change..." aria-label="Prompt for this node" autocomplete="off" />
+    <div class="action-bar-divider"></div>
+    <div class="action-bar-actions" id="action-bar-actions"></div>
   </div>
   <div id="sr-announcer" class="sr-only" aria-live="assertive" aria-atomic="true"></div>
 
@@ -1229,7 +1383,252 @@ export function renderGraphHtml(graphData, options = {}) {
       selectedNode = null;
       hideDetail();
       updateVisibility();
+      // Only dismiss action bar on background click if no text is being composed
+      if (actionBarInput.value.length === 0) {
+        actionBarLocked = false;
+        hideActionBar();
+      }
     });
+
+    // === Action Bar (hover micro-toolbar) ===
+    const actionBar = document.getElementById("action-bar");
+    const actionBarInput = document.getElementById("action-bar-input");
+    const actionBarActions = document.getElementById("action-bar-actions");
+    let actionBarNode = null;
+    let actionBarHideTimer = null;
+    let actionBarLocked = false; // locks bar visible while interacting
+
+    const ACTION_ICONS = {
+      decompose: '<svg viewBox="0 0 256 256" fill="none" stroke="currentColor" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"><path d="M128 40v176"/><path d="M56 128h144"/><circle cx="128" cy="40" r="12" fill="currentColor" stroke="none"/><circle cx="56" cy="128" r="12" fill="currentColor" stroke="none"/><circle cx="200" cy="128" r="12" fill="currentColor" stroke="none"/><circle cx="128" cy="216" r="12" fill="currentColor" stroke="none"/></svg>',
+      addCP: '<svg viewBox="0 0 256 256" fill="currentColor"><path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm40,112H136v32a8,8,0,0,1-16,0V136H88a8,8,0,0,1,0-16h32V88a8,8,0,0,1,16,0v32h32a8,8,0,0,1,0,16Z"/></svg>',
+      addCN: '<svg viewBox="0 0 256 256" fill="currentColor"><path d="M221.87,83.16l-40-32A8,8,0,0,0,176,48H80a8,8,0,0,0-5.87,2.56l-40,32A8,8,0,0,0,32,88v80a8,8,0,0,0,2.13,5.44l40,44A8,8,0,0,0,80,220h96a8,8,0,0,0,5.87-2.56l40-44A8,8,0,0,0,224,168V88A8,8,0,0,0,221.87,83.16Z"/></svg>',
+      addFR: '<svg viewBox="0 0 256 256" fill="currentColor"><path d="M69.12,94.15,28.5,128l40.62,33.85a8,8,0,1,1-10.24,12.29l-48-40a8,8,0,0,1,0-12.29l48-40a8,8,0,0,1,10.24,12.29Zm176,27.7-48-40a8,8,0,1,0-10.24,12.29L227.5,128l-40.62,33.85a8,8,0,1,0,10.24,12.29l48-40a8,8,0,0,0,0-12.29ZM162.73,32.48a8,8,0,0,0-10.25,4.79l-64,176a8,8,0,0,0,4.79,10.26A8.14,8.14,0,0,0,96,224a8,8,0,0,0,7.52-5.27l64-176A8,8,0,0,0,162.73,32.48Z"/></svg>',
+      addNFR: '<svg viewBox="0 0 256 256" fill="currentColor"><path d="M208,40H48A16,16,0,0,0,32,56v58.77c0,89.62,75.82,119.34,91,124.39a15.53,15.53,0,0,0,10,0c15.2-5.05,91-34.77,91-124.39V56A16,16,0,0,0,208,40Z"/></svg>',
+      submit: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>',
+    };
+
+    // Maps action bar buttons to their corresponding SRS methodology skills
+    // Each action maps to a skill tool name registered in the extension
+    const SKILL_MAP = {
+      decompose_problem: { skill: "customer_problems", label: "+Sub-CP", icon: "decompose" },
+      decompose_need: { skill: "customer_needs", label: "+Sub-CN", icon: "decompose" },
+      decompose_fr: { skill: "functional_requirements", label: "+Sub-FR", icon: "decompose" },
+      decompose_nfr: { skill: "functional_requirements", label: "+Sub-NFR", icon: "decompose" },
+      addCN: { skill: "customer_needs", label: "+CN", icon: "addCN" },
+      addFR: { skill: "functional_requirements", label: "+FR", icon: "addFR" },
+      addNFR: { skill: "functional_requirements", label: "+NFR", icon: "addNFR" },
+      addCP: { skill: "customer_problems", label: "+CP", icon: "addCP" },
+    };
+
+    function getActionsForType(type) {
+      const actions = [];
+      if (type === "problem") {
+        // CP can derive CNs and decompose into sub-CPs
+        actions.push({ key: "addCN", label: "+CN", icon: ACTION_ICONS.addCN, skill: SKILL_MAP.addCN.skill });
+        actions.push({ key: "decompose_problem", label: "+Sub-CP", icon: ACTION_ICONS.decompose, skill: SKILL_MAP.decompose_problem.skill });
+      } else if (type === "need") {
+        // CN can derive FRs and decompose into sub-CNs
+        actions.push({ key: "addFR", label: "+FR", icon: ACTION_ICONS.addFR, skill: SKILL_MAP.addFR.skill });
+        actions.push({ key: "decompose_need", label: "+Sub-CN", icon: ACTION_ICONS.decompose, skill: SKILL_MAP.decompose_need.skill });
+      } else if (type === "fr") {
+        // FR can derive NFRs and decompose into sub-FRs
+        actions.push({ key: "addNFR", label: "+NFR", icon: ACTION_ICONS.addNFR, skill: SKILL_MAP.addNFR.skill });
+        actions.push({ key: "decompose_fr", label: "+Sub-FR", icon: ACTION_ICONS.decompose, skill: SKILL_MAP.decompose_fr.skill });
+      } else if (type === "nfr") {
+        // NFR can decompose
+        actions.push({ key: "decompose_nfr", label: "+Sub-NFR", icon: ACTION_ICONS.decompose, skill: SKILL_MAP.decompose_nfr.skill });
+      }
+      return actions;
+    }
+
+    function showActionBar(node, svgElement) {
+      if (actionBarLocked && actionBarNode && actionBarNode.id === node.id) return;
+      actionBarNode = node;
+
+      // Build action buttons for this node type
+      const actions = getActionsForType(node.type);
+      actionBarActions.innerHTML = "";
+      actions.forEach(action => {
+        const btn = document.createElement("button");
+        btn.className = "action-bar-btn";
+        btn.setAttribute("aria-label", action.label);
+        btn.setAttribute("title", action.label);
+        btn.dataset.action = action.key;
+        btn.dataset.skill = action.skill;
+        btn.innerHTML = action.icon + '<span class="action-bar-btn-label">' + action.label + '</span>';
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          handleActionBarAction(action.key, action.skill, node);
+        });
+        actionBarActions.appendChild(btn);
+      });
+
+      // Add submit button for the text input
+      const submitBtn = document.createElement("button");
+      submitBtn.className = "action-bar-btn action-bar-submit";
+      submitBtn.setAttribute("aria-label", "Submit prompt");
+      submitBtn.innerHTML = ACTION_ICONS.submit;
+      submitBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        handleActionBarAction("submit", null, node);
+      });
+      actionBarActions.appendChild(submitBtn);
+
+      // Update placeholder based on node type
+      const typeLabels = { problem: "Customer Problem", need: "Customer Need", fr: "Functional Req", nfr: "Non-Functional Req" };
+      actionBarInput.placeholder = "Describe changes to " + (typeLabels[node.type] || node.type) + " " + node.id + "...";
+      actionBarInput.value = "";
+
+      // Position the bar below the node
+      positionActionBar(svgElement);
+
+      // Show with transition
+      actionBar.style.display = "flex";
+      requestAnimationFrame(() => { actionBar.classList.add("visible"); });
+    }
+
+    function positionActionBar(svgElement) {
+      const svgRect = document.getElementById("graph-svg").getBoundingClientRect();
+      const transform = d3.zoomTransform(document.getElementById("graph-svg"));
+      const x = transform.applyX(actionBarNode.x) + svgRect.left;
+      const y = transform.applyY(actionBarNode.y) + svgRect.top;
+
+      const barW = Math.max(320, actionBar.offsetWidth);
+      const GAP = 12;
+      let top = y + 30 + GAP; // below node (node radius ~22 + gap)
+      let left = x - barW / 2;
+
+      // Keep in viewport
+      if (top + 40 > window.innerHeight - 16) top = y - 30 - 36 - GAP; // above
+      if (left < 8) left = 8;
+      if (left + barW > window.innerWidth - 8) left = window.innerWidth - barW - 8;
+
+      Object.assign(actionBar.style, { top: top + "px", left: left + "px", width: barW + "px" });
+    }
+
+    function hideActionBar() {
+      if (actionBarLocked) return;
+      // Never hide while user has typed content — prevents losing their work
+      if (actionBarInput.value.length > 0) return;
+      actionBar.classList.remove("visible");
+      setTimeout(() => {
+        if (!actionBar.classList.contains("visible")) actionBar.style.display = "none";
+      }, 180);
+      actionBarNode = null;
+    }
+
+    function handleActionBarAction(actionKey, skillName, node) {
+      const prompt = actionBarInput.value.trim();
+
+      // Build context message for the skill invocation
+      const typeLabels = { problem: "Customer Problem", need: "Customer Need", fr: "Functional Requirement", nfr: "Non-Functional Requirement" };
+      const nodeLabel = typeLabels[node.type] || node.type;
+      let context = "";
+
+      if (actionKey === "submit") {
+        if (!prompt) return;
+        const typeSkillMap = { problem: "customer_problems", need: "customer_needs", fr: "functional_requirements", nfr: "functional_requirements" };
+        skillName = typeSkillMap[node.type] || "customer_problems";
+        context = "Regarding " + nodeLabel + " " + node.id + " (" + node.label + "): " + prompt;
+      } else if (actionKey.startsWith("decompose")) {
+        context = "Decompose " + nodeLabel + " " + node.id + " (" + node.label + ") into finer-grained sub-items of the same type.";
+        if (prompt) context += " Additional context: " + prompt;
+      } else if (actionKey === "addCN") {
+        context = "Derive a new Customer Need (CN) from " + nodeLabel + " " + node.id + " (" + node.label + "). The CN must trace back to this problem.";
+        if (prompt) context += " Additional context: " + prompt;
+      } else if (actionKey === "addFR") {
+        context = "Derive a new Functional Requirement (FR) from " + nodeLabel + " " + node.id + " (" + node.label + "). The FR must trace back to this need.";
+        if (prompt) context += " Additional context: " + prompt;
+      } else if (actionKey === "addNFR") {
+        context = "Derive a new Non-Functional Requirement (NFR) from " + nodeLabel + " " + node.id + " (" + node.label + "). The NFR must trace back to this requirement.";
+        if (prompt) context += " Additional context: " + prompt;
+      }
+
+      if (!context || !skillName) return;
+
+      // Show persistent pending status
+      showToast("⏳ Sending to agent: " + skillName + " on " + node.id + "...", { variant: "pending", persistent: true });
+
+      // Send action to the extension server → triggers session.send()
+      const serverBase = location.origin;
+      fetch(serverBase + "/api/invoke-skill", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: actionKey,
+          skill: skillName,
+          nodeId: node.id,
+          nodeType: node.type,
+          nodeLabel: node.label,
+          context: context,
+        }),
+      }).then(async res => {
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data.ok) {
+          showToast("✓ Agent received: " + skillName + " → processing " + node.id);
+        } else {
+          showToast("⚠ Failed to reach agent", {
+            variant: "error",
+            persistent: true,
+            detail: data.detail || data.error || ("HTTP " + res.status),
+          });
+        }
+      }).catch(err => {
+        showToast("⚠ Connection error", {
+          variant: "error",
+          persistent: true,
+          detail: err.message || "Could not reach the extension server. Check if the canvas is still running.",
+        });
+      });
+
+      actionBarInput.value = "";
+      actionBarLocked = false;
+      actionBar.classList.remove("pinned");
+      hideActionBar();
+    }
+
+    // Hover interactions on nodes
+    nodeElements.on("mouseenter", function(event, d) {
+      clearTimeout(actionBarHideTimer);
+      showActionBar(d, this);
+    });
+    nodeElements.on("mouseleave", function() {
+      if (actionBarLocked) return;
+      actionBarHideTimer = setTimeout(hideActionBar, 250);
+    });
+
+    // Keep bar visible while hovering it
+    actionBar.addEventListener("mouseenter", () => {
+      clearTimeout(actionBarHideTimer);
+      actionBarLocked = true;
+    });
+    actionBar.addEventListener("mouseleave", () => {
+      // Stay locked if user has typed content — they're thinking
+      if (actionBarInput.value.length > 0) return;
+      actionBarLocked = false;
+      actionBarHideTimer = setTimeout(hideActionBar, 300);
+    });
+
+    // Submit on Enter in the input
+    actionBarInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        handleActionBarAction("submit", null, actionBarNode);
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        actionBarInput.value = "";
+        actionBar.classList.remove("pinned");
+        actionBarLocked = false;
+        hideActionBar();
+      }
+      e.stopPropagation();
+    });
+    actionBarInput.addEventListener("input", () => {
+      // Toggle pinned state based on content presence
+      actionBar.classList.toggle("pinned", actionBarInput.value.length > 0);
+    });
+    actionBarInput.addEventListener("click", (e) => e.stopPropagation());
 
     // Detail panel
     const panel = document.getElementById("detail-panel");
@@ -1604,12 +2003,58 @@ export function renderGraphHtml(graphData, options = {}) {
     });
 
     // Toast
-    function showToast(message) {
+    const TOAST_ICONS = {
+      success: '<path d="M173.66,98.34a8,8,0,0,1,0,11.32l-56,56a8,8,0,0,1-11.32,0l-24-24a8,8,0,0,1,11.32-11.32L112,148.69l50.34-50.35A8,8,0,0,1,173.66,98.34ZM232,128A104,104,0,1,1,128,24,104.11,104.11,0,0,1,232,128Zm-16,0a88,88,0,1,0-88,88A88.1,88.1,0,0,0,216,128Z"/>',
+      pending: '<path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm0,192a88,88,0,1,1,88-88A88.1,88.1,0,0,1,128,216Zm64-88a8,8,0,0,1-8,8H128a8,8,0,0,1-8-8V72a8,8,0,0,1,16,0v48h48A8,8,0,0,1,192,128Z"/>',
+      error: '<path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm0,192a88,88,0,1,1,88-88A88.1,88.1,0,0,1,128,216Zm-8-80V80a8,8,0,0,1,16,0v56a8,8,0,0,1-16,0Zm20,36a12,12,0,1,1-12-12A12,12,0,0,1,140,172Z"/>',
+    };
+    let toastAutoTimer = null;
+
+    // showToast(message, opts?)
+    // opts.variant: "success" (default) | "pending" | "error"
+    // opts.persistent: if true, stays until dismissed or replaced
+    // opts.detail: error detail string (shown as clickable link)
+    function showToast(message, opts) {
+      opts = opts || {};
       const toast = document.getElementById("toast");
+      const toastIcon = document.getElementById("toast-icon");
+      const toastDetail = document.getElementById("toast-detail");
       document.getElementById("toast-text").textContent = message;
+
+      // Icon
+      const variant = opts.variant || "success";
+      toastIcon.innerHTML = TOAST_ICONS[variant] || TOAST_ICONS.success;
+
+      // Variant classes
+      toast.classList.remove("toast-pending", "toast-error");
+      if (variant === "pending") toast.classList.add("toast-pending");
+      if (variant === "error") toast.classList.add("toast-error");
+
+      // Detail link (for errors)
+      if (opts.detail) {
+        toastDetail.textContent = "Show details";
+        toastDetail.title = opts.detail;
+        toastDetail.style.display = "inline";
+        toastDetail.onclick = () => {
+          alert("Action Error Details:\\n\\n" + opts.detail);
+        };
+      } else {
+        toastDetail.style.display = "none";
+      }
+
+      // Show
       toast.classList.add("show");
-      setTimeout(() => toast.classList.remove("show"), 3000);
+      clearTimeout(toastAutoTimer);
+      if (!opts.persistent) {
+        toastAutoTimer = setTimeout(() => toast.classList.remove("show"), 3000);
+      }
     }
+
+    // Dismiss button
+    document.getElementById("toast-dismiss").addEventListener("click", () => {
+      clearTimeout(toastAutoTimer);
+      document.getElementById("toast").classList.remove("show");
+    });
 
     // Show toast on load if it's the demo
     if (isDemo) {
