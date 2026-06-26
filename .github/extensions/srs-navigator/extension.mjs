@@ -11,7 +11,7 @@ import { joinSession, createCanvas, CanvasError } from "@github/copilot-sdk/exte
 
 import { parseSpecificationData, buildGraphData, convertJSONToSpecificationData } from "./lib/parser.mjs";
 import { validateSpecificationJSON, validateReferenceIntegrity } from "./lib/validation.mjs";
-import { renderGraphHtml } from "./lib/renderer.mjs";
+import { renderGraphHtml, renderLandingHtml } from "./lib/renderer.mjs";
 import { DEMO_SPEC } from "./lib/demo-spec.mjs";
 import { backgroundSync } from "./lib/skills-sync.mjs";
 
@@ -394,6 +394,37 @@ const session = await joinSession({
                             message: `${enriched.length} action(s) ready. For each action, invoke the specified skill tool with the provided context.`,
                         };
                     }
+                },
+                {
+                    name: "learn",
+                    description: "Trigger the Problem-Based SRS methodology to scan the project and generate a specification. This is the primary onboarding action for projects without an existing spec.",
+                    inputSchema: {
+                        type: "object",
+                        properties: {
+                            context: {
+                                type: "string",
+                                description: "Optional additional context about the project to help guide spec generation."
+                            }
+                        }
+                    },
+                    handler: async (ctx) => {
+                        const entry = instances.get(ctx.instanceId);
+                        if (!entry) throw new CanvasError("not_open", "Canvas instance not found");
+
+                        const skillPath = resolve(skillsDir, "problem-based-srs.md");
+                        const skillContent = await readFile(skillPath, "utf-8");
+
+                        let result = skillContent;
+                        if (ctx.input?.context) {
+                            result += `\n\n---\n\n## User-Provided Context\n\n${ctx.input.context}`;
+                        }
+
+                        return {
+                            instruction: "Use the `problem_based_srs` tool to run the full methodology. After generating the specification JSON, use the `load_specification` canvas action to display it in the navigator.",
+                            skillContent: result,
+                            message: "Learn action triggered. Run the problem_based_srs methodology and load the result into the canvas."
+                        };
+                    }
                 }
             ],
             open: async (ctx) => {
@@ -424,11 +455,92 @@ const session = await joinSession({
                         graphData = fromFolder.graphData;
                         specName = fromFolder.specName;
                     } else {
-                        // Fall back to embedded demo specification
-                        const result = loadAndBuildGraph(DEMO_SPEC);
-                        graphData = result.graphData;
-                        specName = result.specName;
-                        isDemo = true;
+                        // No spec found — show landing page
+                        const landingHtml = renderLandingHtml();
+
+                        const server = createServer((req, res) => {
+                            const inst = instances.get(ctx.instanceId);
+
+                            if (req.url === "/api/landing-action" && req.method === "POST") {
+                                let body = "";
+                                req.on("data", (chunk) => { body += chunk; });
+                                req.on("end", async () => {
+                                    try {
+                                        const { action } = JSON.parse(body);
+
+                                        if (action === "demo") {
+                                            // Load demo spec and switch to graph view
+                                            const result = loadAndBuildGraph(DEMO_SPEC);
+                                            const html = renderGraphHtml(result.graphData, { title: result.specName, isDemo: true });
+                                            inst.graphData = result.graphData;
+                                            inst.specName = result.specName;
+                                            inst.html = html;
+                                            inst.isLanding = false;
+                                            res.setHeader("Content-Type", "application/json");
+                                            res.end(JSON.stringify({ ok: true, reload: true }));
+                                        } else if (action === "learn") {
+                                            // Send learn prompt to agent session
+                                            const prompt = [
+                                                "## SRS Navigator: Learn & Create Specification",
+                                                "",
+                                                "The user wants to create a Problem-Based SRS specification for their project.",
+                                                "Use the `problem_based_srs` tool to run the full methodology.",
+                                                "Scan the workspace for existing code, README, and documentation to provide context.",
+                                                "After generating the specification, use the `load_specification` canvas action to display it in the navigator.",
+                                            ].join("\n");
+                                            await session.send({ prompt });
+                                            res.setHeader("Content-Type", "application/json");
+                                            res.end(JSON.stringify({ ok: true, sent: true }));
+                                        } else if (action === "load") {
+                                            // Send load prompt to agent session
+                                            const prompt = [
+                                                "## SRS Navigator: Load Specification",
+                                                "",
+                                                "The user wants to load an existing specification file.",
+                                                "Look for .spec/*.json files in the workspace, or ask the user which file to load.",
+                                                "Then use the `load_specification` canvas action to display it.",
+                                            ].join("\n");
+                                            await session.send({ prompt });
+                                            res.setHeader("Content-Type", "application/json");
+                                            res.end(JSON.stringify({ ok: true, sent: true }));
+                                        } else {
+                                            res.statusCode = 400;
+                                            res.setHeader("Content-Type", "application/json");
+                                            res.end(JSON.stringify({ ok: false, error: "Unknown action" }));
+                                        }
+                                    } catch (e) {
+                                        res.statusCode = 500;
+                                        res.setHeader("Content-Type", "application/json");
+                                        res.end(JSON.stringify({ ok: false, error: e.message }));
+                                    }
+                                });
+                                return;
+                            }
+
+                            if (req.url === "/api/state") {
+                                res.setHeader("Content-Type", "application/json");
+                                res.end(JSON.stringify({
+                                    specName: inst?.specName || null,
+                                    nodeCount: inst?.graphData?.nodes?.length || 0,
+                                    linkCount: inst?.graphData?.links?.length || 0,
+                                    isLanding: inst?.isLanding || false,
+                                }));
+                                return;
+                            }
+
+                            res.setHeader("Content-Type", "text/html; charset=utf-8");
+                            res.end(inst?.html || landingHtml);
+                        });
+
+                        await new Promise((r) => server.listen(0, "127.0.0.1", r));
+                        const url = `http://127.0.0.1:${server.address().port}/`;
+
+                        instances.set(ctx.instanceId, { server, url, html: landingHtml, graphData: null, specName: null, isLanding: true });
+
+                        // Trigger background skills sync (non-blocking)
+                        backgroundSync(skillsDir, (msg) => session.log(msg)).catch(() => {});
+
+                        return { title: "SRS Navigator", url };
                     }
                 }
 
