@@ -265,6 +265,7 @@ const session = await joinSession({
                         entry.graphData = graphData;
                         entry.specName = specName;
                         entry.html = html;
+                        entry.isLanding = false;
 
                         return {
                             specName,
@@ -555,9 +556,15 @@ const session = await joinSession({
                             const inst = instances.get(ctx.instanceId);
 
                             if (req.url === "/api/check-spec" && req.method === "GET") {
-                                // Polling endpoint: check if a spec has appeared in .spec/
+                                // Polling endpoint: check if spec was loaded via action OR appeared in .spec/
                                 (async () => {
                                     try {
+                                        // If load_specification already loaded a spec, signal reload
+                                        if (inst && !inst.isLanding) {
+                                            res.setHeader("Content-Type", "application/json");
+                                            res.end(JSON.stringify({ found: true, specName: inst.specName }));
+                                            return;
+                                        }
                                         const result = workspacePathResolved ? await loadFromSpecFolder(workspacePathResolved) : null;
                                         if (result) {
                                             // Spec found — switch to graph view
