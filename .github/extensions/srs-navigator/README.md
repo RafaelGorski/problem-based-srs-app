@@ -167,11 +167,15 @@ sequenceDiagram
     Agent->>Spec: Write / update specification file
     opt Agent confirms display
         Agent->>Srv: load_specification canvas action
+        Note over Srv: Server records sourceFilePath
     end
+
+    Agent-->>Srv: session.idle (turn complete)
+    Note over Srv: Idle hook reloads every instance<br/>from its sourceFilePath (no session.send → no loop)
 
     loop Every 3s (auto-refresh poll)
         Bar->>Srv: GET /api/refresh-spec
-        Srv->>Spec: Re-read spec from disk
+        Srv->>Spec: Re-read from sourceFilePath (same file the agent loaded)
         Srv->>Srv: Compare content fingerprint vs displayed
         Srv-->>Bar: { refreshed: true | false }
     end
@@ -199,8 +203,9 @@ flowchart LR
 
     UI -- "fetch /api/*" --> Server
     Server -- "session.send()" --> Agent
+    Agent -- "session.idle hook" --> Server
     Agent -- "edits files" --> Repo
-    Server -- "reads on poll" --> Repo
+    Server -- "reads sourceFilePath on poll/idle" --> Repo
     Canvas -- "load_specification" --> Server
     Canvas --- Skills
     Server -- "serves graph HTML" --> UI
@@ -209,6 +214,8 @@ flowchart LR
 **Key design points:**
 
 - **Content-based refresh.** `/api/refresh-spec` compares a fingerprint of the loaded graph against what the browser currently displays, so the canvas reloads on *any* spec change — not only when node/link counts differ.
+- **Source-aligned refresh.** The refresh button, the auto-refresh poll, and the idle hook all reload through one helper (`reloadInstanceFromSource`) that re-reads the **same file the agent loaded** (the instance's tracked `sourceFilePath`), only falling back to a `.spec/` folder scan when no source file is known. This keeps the manual refresh button in lock-step with what `load_specification` shows.
+- **Idle completion hook.** The extension listens for `session.idle`; when the agent finishes a turn it reloads every open canvas from its source so the UI reflects spec edits even if the agent never called `load_specification`. The hook never calls `session.send()`, so it cannot trigger another agent turn (no feedback loop) — the browser's 3s poll then performs the actual reload.
 - **Continuous polling.** The live graph polls every 3s and reloads itself when the spec changes, whether the agent edits `.spec/` directly or calls the `load_specification` action.
 - **Bundled skills.** Methodology skills ship inside the extension and are read locally. The extension does **not** download skill files at runtime, so opening the canvas never triggers an extension re-install / "downloaded" notification.
 
