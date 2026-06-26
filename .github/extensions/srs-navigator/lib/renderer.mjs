@@ -677,6 +677,115 @@ export function renderGraphHtml(graphData, options = {}) {
       .detail-panel { width: 100%; }
       .type-indicators { display: none; }
     }
+
+    /* Action bar - appears on node hover */
+    .action-bar {
+      position: fixed;
+      display: none;
+      align-items: stretch;
+      height: 36px;
+      background: oklch(0.15 0.008 265);
+      border-radius: 10px;
+      box-shadow: 0 12px 32px -8px oklch(0 0 0 / 0.5), 0 0 0 1px oklch(0.30 0.02 265 / 0.3);
+      z-index: 300;
+      opacity: 0;
+      transform: translateY(6px);
+      transition: opacity 0.15s cubic-bezier(0.22, 1, 0.36, 1), transform 0.15s cubic-bezier(0.22, 1, 0.36, 1);
+      pointer-events: auto;
+      overflow: hidden;
+    }
+    .action-bar.visible {
+      display: flex;
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .action-bar-input {
+      flex: 1;
+      min-width: 140px;
+      height: 100%;
+      border: none;
+      background: transparent;
+      color: oklch(0.94 0.02 265);
+      font-family: 'Space Grotesk', system-ui, sans-serif;
+      font-size: 12px;
+      font-weight: 400;
+      padding: 0 12px;
+      outline: none;
+    }
+    .action-bar-input::placeholder {
+      color: oklch(0.55 0.02 265);
+    }
+    .action-bar-input:focus::placeholder {
+      color: oklch(0.45 0.02 265);
+    }
+    .action-bar-divider {
+      width: 1px;
+      align-self: stretch;
+      margin: 7px 0;
+      background: oklch(0.30 0.02 265);
+    }
+    .action-bar-actions {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      padding: 0 4px;
+    }
+    .action-bar-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      border: none;
+      border-radius: 6px;
+      background: transparent;
+      color: oklch(0.70 0.03 265);
+      cursor: pointer;
+      transition: background 0.12s ease, color 0.12s ease;
+      position: relative;
+    }
+    .action-bar-btn:hover {
+      background: oklch(0.25 0.02 265);
+      color: oklch(0.94 0.02 265);
+    }
+    .action-bar-btn:active {
+      background: oklch(0.20 0.03 265);
+    }
+    .action-bar-btn svg {
+      width: 15px;
+      height: 15px;
+    }
+    .action-bar-btn[aria-label]::after {
+      content: attr(aria-label);
+      position: absolute;
+      bottom: calc(100% + 6px);
+      left: 50%;
+      transform: translateX(-50%);
+      background: oklch(0.10 0.01 265);
+      color: oklch(0.90 0.02 265);
+      font-size: 10px;
+      font-weight: 500;
+      padding: 3px 6px;
+      border-radius: 4px;
+      white-space: nowrap;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.12s ease;
+    }
+    .action-bar-btn:hover[aria-label]::after {
+      opacity: 1;
+    }
+    .action-bar-submit {
+      color: var(--node-fr);
+    }
+    .action-bar-submit:hover {
+      background: oklch(0.25 0.06 265);
+      color: oklch(0.75 0.18 265);
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .action-bar { transition: none; }
+      .action-bar-btn::after { transition: none; }
+    }
   </style>
 </head>
 <body>
@@ -766,6 +875,13 @@ export function renderGraphHtml(graphData, options = {}) {
   <div class="toast" id="toast">
     <svg width="16" height="16" viewBox="0 0 256 256" fill="currentColor"><path d="M173.66,98.34a8,8,0,0,1,0,11.32l-56,56a8,8,0,0,1-11.32,0l-24-24a8,8,0,0,1,11.32-11.32L112,148.69l50.34-50.35A8,8,0,0,1,173.66,98.34ZM232,128A104,104,0,1,1,128,24,104.11,104.11,0,0,1,232,128Zm-16,0a88,88,0,1,0-88,88A88.1,88.1,0,0,0,216,128Z"/></svg>
     <span id="toast-text"></span>
+  </div>
+
+  <!-- Action bar: appears on node hover -->
+  <div class="action-bar" id="action-bar" role="toolbar" aria-label="Node actions">
+    <input class="action-bar-input" id="action-bar-input" type="text" placeholder="Describe a change..." aria-label="Prompt for this node" autocomplete="off" />
+    <div class="action-bar-divider"></div>
+    <div class="action-bar-actions" id="action-bar-actions"></div>
   </div>
 
   <script>
@@ -935,7 +1051,166 @@ export function renderGraphHtml(graphData, options = {}) {
       selectedNode = null;
       hideDetail();
       updateVisibility();
+      hideActionBar();
     });
+
+    // === Action Bar (hover micro-toolbar) ===
+    const actionBar = document.getElementById("action-bar");
+    const actionBarInput = document.getElementById("action-bar-input");
+    const actionBarActions = document.getElementById("action-bar-actions");
+    let actionBarNode = null;
+    let actionBarHideTimer = null;
+    let actionBarLocked = false; // locks bar visible while interacting
+
+    const ACTION_ICONS = {
+      decompose: '<svg viewBox="0 0 256 256" fill="none" stroke="currentColor" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"><path d="M128 40v176"/><path d="M56 128h144"/><circle cx="128" cy="40" r="12" fill="currentColor" stroke="none"/><circle cx="56" cy="128" r="12" fill="currentColor" stroke="none"/><circle cx="200" cy="128" r="12" fill="currentColor" stroke="none"/><circle cx="128" cy="216" r="12" fill="currentColor" stroke="none"/></svg>',
+      addCN: '<svg viewBox="0 0 256 256" fill="currentColor"><path d="M221.87,83.16l-40-32A8,8,0,0,0,176,48H80a8,8,0,0,0-5.87,2.56l-40,32A8,8,0,0,0,32,88v80a8,8,0,0,0,2.13,5.44l40,44A8,8,0,0,0,80,220h96a8,8,0,0,0,5.87-2.56l40-44A8,8,0,0,0,224,168V88A8,8,0,0,0,221.87,83.16Z"/></svg>',
+      addFR: '<svg viewBox="0 0 256 256" fill="currentColor"><path d="M69.12,94.15,28.5,128l40.62,33.85a8,8,0,1,1-10.24,12.29l-48-40a8,8,0,0,1,0-12.29l48-40a8,8,0,0,1,10.24,12.29Zm176,27.7-48-40a8,8,0,1,0-10.24,12.29L227.5,128l-40.62,33.85a8,8,0,1,0,10.24,12.29l48-40a8,8,0,0,0,0-12.29ZM162.73,32.48a8,8,0,0,0-10.25,4.79l-64,176a8,8,0,0,0,4.79,10.26A8.14,8.14,0,0,0,96,224a8,8,0,0,0,7.52-5.27l64-176A8,8,0,0,0,162.73,32.48Z"/></svg>',
+      addNFR: '<svg viewBox="0 0 256 256" fill="currentColor"><path d="M208,40H48A16,16,0,0,0,32,56v58.77c0,89.62,75.82,119.34,91,124.39a15.53,15.53,0,0,0,10,0c15.2-5.05,91-34.77,91-124.39V56A16,16,0,0,0,208,40Z"/></svg>',
+      submit: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>',
+    };
+
+    function getActionsForType(type) {
+      const actions = [{ key: "decompose", label: "Decompose", icon: ACTION_ICONS.decompose }];
+      if (type === "problem") {
+        actions.push({ key: "addCN", label: "Add Need", icon: ACTION_ICONS.addCN });
+      } else if (type === "need") {
+        actions.push({ key: "addFR", label: "Add FR", icon: ACTION_ICONS.addFR });
+      } else if (type === "fr") {
+        actions.push({ key: "addNFR", label: "Add NFR", icon: ACTION_ICONS.addNFR });
+      } else if (type === "nfr") {
+        actions.push({ key: "addFR", label: "Add FR", icon: ACTION_ICONS.addFR });
+      }
+      actions.push({ key: "submit", label: "Submit", icon: ACTION_ICONS.submit });
+      return actions;
+    }
+
+    function showActionBar(node, svgElement) {
+      if (actionBarLocked && actionBarNode && actionBarNode.id === node.id) return;
+      actionBarNode = node;
+
+      // Build action buttons for this node type
+      const actions = getActionsForType(node.type);
+      actionBarActions.innerHTML = "";
+      actions.forEach(action => {
+        const btn = document.createElement("button");
+        btn.className = "action-bar-btn" + (action.key === "submit" ? " action-bar-submit" : "");
+        btn.setAttribute("aria-label", action.label);
+        btn.dataset.action = action.key;
+        btn.innerHTML = action.icon;
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          handleActionBarAction(action.key, node);
+        });
+        actionBarActions.appendChild(btn);
+      });
+
+      // Update placeholder based on node
+      actionBarInput.placeholder = "Describe a change to " + node.id + "...";
+      actionBarInput.value = "";
+
+      // Position the bar below the node
+      positionActionBar(svgElement);
+
+      // Show with transition
+      actionBar.style.display = "flex";
+      requestAnimationFrame(() => { actionBar.classList.add("visible"); });
+    }
+
+    function positionActionBar(svgElement) {
+      const svgRect = document.getElementById("graph-svg").getBoundingClientRect();
+      const transform = d3.zoomTransform(document.getElementById("graph-svg"));
+      const x = transform.applyX(actionBarNode.x) + svgRect.left;
+      const y = transform.applyY(actionBarNode.y) + svgRect.top;
+
+      const barW = Math.max(320, actionBar.offsetWidth);
+      const GAP = 12;
+      let top = y + 30 + GAP; // below node (node radius ~22 + gap)
+      let left = x - barW / 2;
+
+      // Keep in viewport
+      if (top + 40 > window.innerHeight - 16) top = y - 30 - 36 - GAP; // above
+      if (left < 8) left = 8;
+      if (left + barW > window.innerWidth - 8) left = window.innerWidth - barW - 8;
+
+      Object.assign(actionBar.style, { top: top + "px", left: left + "px", width: barW + "px" });
+    }
+
+    function hideActionBar() {
+      if (actionBarLocked) return;
+      actionBar.classList.remove("visible");
+      setTimeout(() => {
+        if (!actionBar.classList.contains("visible")) actionBar.style.display = "none";
+      }, 180);
+      actionBarNode = null;
+    }
+
+    function handleActionBarAction(actionKey, node) {
+      const prompt = actionBarInput.value.trim();
+      let message = "";
+
+      if (actionKey === "submit") {
+        if (!prompt) return;
+        message = "For node " + node.id + " (" + node.label + "): " + prompt;
+      } else if (actionKey === "decompose") {
+        message = "Decompose " + node.id + " (" + node.label + ") into sub-items.";
+        if (prompt) message += " Context: " + prompt;
+      } else if (actionKey === "addCN") {
+        message = "Derive a Customer Need (CN) from " + node.id + " (" + node.label + ").";
+        if (prompt) message += " Context: " + prompt;
+      } else if (actionKey === "addFR") {
+        message = "Derive a Functional Requirement (FR) from " + node.id + " (" + node.label + ").";
+        if (prompt) message += " Context: " + prompt;
+      } else if (actionKey === "addNFR") {
+        message = "Derive a Non-Functional Requirement (NFR) from " + node.id + " (" + node.label + ").";
+        if (prompt) message += " Context: " + prompt;
+      }
+
+      if (message) {
+        // Dispatch to parent (Copilot canvas host) or show toast
+        if (window.parent !== window) {
+          window.parent.postMessage({ type: "srs-action", action: actionKey, nodeId: node.id, nodeType: node.type, prompt: message }, "*");
+        }
+        showToast("Action sent: " + actionKey + " on " + node.id);
+        actionBarLocked = false;
+        hideActionBar();
+      }
+    }
+
+    // Hover interactions on nodes
+    nodeElements.on("mouseenter", function(event, d) {
+      clearTimeout(actionBarHideTimer);
+      showActionBar(d, this);
+    });
+    nodeElements.on("mouseleave", function() {
+      if (actionBarLocked) return;
+      actionBarHideTimer = setTimeout(hideActionBar, 250);
+    });
+
+    // Keep bar visible while hovering it
+    actionBar.addEventListener("mouseenter", () => {
+      clearTimeout(actionBarHideTimer);
+      actionBarLocked = true;
+    });
+    actionBar.addEventListener("mouseleave", () => {
+      actionBarLocked = false;
+      actionBarHideTimer = setTimeout(hideActionBar, 300);
+    });
+
+    // Submit on Enter in the input
+    actionBarInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        handleActionBarAction("submit", actionBarNode);
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        actionBarLocked = false;
+        hideActionBar();
+      }
+      e.stopPropagation();
+    });
+    actionBarInput.addEventListener("click", (e) => e.stopPropagation());
 
     // Detail panel
     const panel = document.getElementById("detail-panel");
