@@ -494,6 +494,59 @@ export function renderGraphHtml(graphData, options = {}) {
       pointer-events: none;
     }
 
+    /* Health Bar */
+    .health-bar {
+      display: flex;
+      align-items: center;
+      gap: var(--space-md);
+      padding: var(--space-sm) var(--space-lg);
+      border-bottom: 1px solid var(--border);
+      background: oklch(0.97 0.003 240);
+      font-size: 12px;
+      font-weight: 500;
+      flex-shrink: 0;
+      overflow-x: auto;
+    }
+    .health-metric {
+      display: flex;
+      align-items: center;
+      gap: var(--space-xs);
+      white-space: nowrap;
+      padding: 3px 8px;
+      border-radius: 9999px;
+      cursor: pointer;
+      transition: background var(--transition-fast), box-shadow var(--transition-fast);
+    }
+    .health-metric:hover { background: oklch(0.93 0.01 240); }
+    .health-metric.active { background: oklch(0.90 0.03 200); box-shadow: 0 0 0 1px oklch(0.55 0.15 200 / 0.3); }
+    .health-metric .count {
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .health-metric .count.alert { color: oklch(0.55 0.19 30); }
+    .health-metric .count.ok { color: oklch(0.45 0.15 145); }
+    .health-metric .label { color: var(--muted-foreground); }
+    .health-metric-sep {
+      width: 1px;
+      height: 16px;
+      background: var(--border);
+      flex-shrink: 0;
+    }
+
+    /* Hot-spot pulse animation on nodes */
+    @keyframes hotspot-pulse {
+      0%, 100% { r: 26; opacity: 0.4; }
+      50% { r: 32; opacity: 0.15; }
+    }
+    .hotspot-ring {
+      animation: hotspot-pulse 2s ease-in-out infinite;
+      pointer-events: none;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .hotspot-ring { animation: none; opacity: 0.25; r: 28; }
+    }
+
     /* Demo indicator badge */
     .demo-badge {
       display: inline-flex;
@@ -717,6 +770,8 @@ export function renderGraphHtml(graphData, options = {}) {
     </div>
   </div>
 
+  <div class="health-bar" id="health-bar"></div>
+
   <div class="graph-container" id="graph-container">
     <svg id="graph-svg"></svg>
     <div class="zoom-controls">
@@ -842,11 +897,112 @@ export function renderGraphHtml(graphData, options = {}) {
     const links = graphData.links.map(d => ({...d}));
     const nodes = graphData.nodes.map(d => ({...d}));
 
+    // === HOT-SPOT DETECTION ===
+    // Compute connectivity and identify nodes that need attention
+    const hotspots = (function() {
+      const inDegree = {};
+      const outDegree = {};
+      nodes.forEach(n => { inDegree[n.id] = 0; outDegree[n.id] = 0; });
+      links.forEach(l => {
+        const src = typeof l.source === 'object' ? l.source.id : l.source;
+        const tgt = typeof l.target === 'object' ? l.target.id : l.target;
+        outDegree[src] = (outDegree[src] || 0) + 1;
+        inDegree[tgt] = (inDegree[tgt] || 0) + 1;
+      });
+
+      const orphanedProblems = []; // CP with no downstream
+      const unmetNeeds = [];       // CN with no downstream FR/NFR
+      const hubs = [];             // High connectivity (degree >= 4)
+      const leafNodes = [];        // Nodes with no connections at all
+
+      nodes.forEach(n => {
+        const totalDegree = (inDegree[n.id] || 0) + (outDegree[n.id] || 0);
+        n._degree = totalDegree;
+        n._hotspot = null;
+        n._hotspotSeverity = 0; // 0=none, 1=info, 2=warning, 3=critical
+
+        if (n.type === 'problem' && (outDegree[n.id] || 0) === 0) {
+          orphanedProblems.push(n.id);
+          n._hotspot = 'orphaned';
+          n._hotspotSeverity = 3;
+        } else if (n.type === 'need' && (outDegree[n.id] || 0) === 0) {
+          unmetNeeds.push(n.id);
+          n._hotspot = 'unmet';
+          n._hotspotSeverity = 2;
+        } else if (totalDegree >= 4) {
+          hubs.push(n.id);
+          n._hotspot = 'hub';
+          n._hotspotSeverity = 1;
+        } else if (totalDegree === 0) {
+          leafNodes.push(n.id);
+          n._hotspot = 'isolated';
+          n._hotspotSeverity = 3;
+        }
+      });
+
+      // Node size scale: base 22, scale up for degree
+      const maxDegree = Math.max(...nodes.map(n => n._degree), 1);
+      nodes.forEach(n => {
+        // Scale from 22 (min) to 34 (max) based on relative degree
+        n._radius = 22 + (n._degree / maxDegree) * 12;
+      });
+
+      return { orphanedProblems, unmetNeeds, hubs, leafNodes, maxDegree };
+    })();
+
+    // Render health bar
+    (function renderHealthBar() {
+      const bar = document.getElementById('health-bar');
+      const total = nodes.length;
+      const gaps = hotspots.orphanedProblems.length + hotspots.unmetNeeds.length + hotspots.leafNodes.length;
+      const coverage = total > 0 ? Math.round(((total - gaps) / total) * 100) : 100;
+
+      let html = '';
+      html += '<div class="health-metric" data-filter="all"><span class="count">' + total + '</span><span class="label">nodes</span></div>';
+      html += '<div class="health-metric-sep"></div>';
+
+      if (hotspots.orphanedProblems.length > 0) {
+        html += '<div class="health-metric" data-filter="orphaned" title="Problems with no linked needs"><span class="count alert">' + hotspots.orphanedProblems.length + '</span><span class="label">orphaned problems</span></div>';
+      }
+      if (hotspots.unmetNeeds.length > 0) {
+        html += '<div class="health-metric" data-filter="unmet" title="Needs with no linked requirements"><span class="count alert">' + hotspots.unmetNeeds.length + '</span><span class="label">unmet needs</span></div>';
+      }
+      if (hotspots.leafNodes.length > 0) {
+        html += '<div class="health-metric" data-filter="isolated" title="Completely disconnected nodes"><span class="count alert">' + hotspots.leafNodes.length + '</span><span class="label">isolated</span></div>';
+      }
+      if (hotspots.hubs.length > 0) {
+        html += '<div class="health-metric" data-filter="hub" title="High-connectivity nodes (4+ connections)"><span class="count ok">' + hotspots.hubs.length + '</span><span class="label">hubs</span></div>';
+      }
+
+      html += '<div class="health-metric-sep"></div>';
+      html += '<div class="health-metric" data-filter="all"><span class="count ' + (coverage === 100 ? 'ok' : coverage >= 80 ? '' : 'alert') + '">' + coverage + '%</span><span class="label">traceability</span></div>';
+
+      bar.innerHTML = html;
+
+      // Wire health metric click → filter hot spots
+      bar.querySelectorAll('.health-metric[data-filter]').forEach(el => {
+        el.addEventListener('click', () => {
+          const filter = el.dataset.filter;
+          const wasActive = el.classList.contains('active');
+          bar.querySelectorAll('.health-metric').forEach(m => m.classList.remove('active'));
+          if (!wasActive && filter !== 'all') {
+            el.classList.add('active');
+            hotspotFilter = filter;
+          } else {
+            hotspotFilter = null;
+          }
+          updateVisibility();
+        });
+      });
+    })();
+
+    let hotspotFilter = null;
+
     const simulation = d3.forceSimulation(nodes)
       .force("link", d3.forceLink(links).id(d => d.id).distance(150))
       .force("charge", d3.forceManyBody().strength(-400))
       .force("center", d3.forceCenter(width / 2, height / 2))
-      .force("collision", d3.forceCollide().radius(50));
+      .force("collision", d3.forceCollide().radius(d => (d._radius || 22) + 28));
 
     // Hull group (for selection highlighting)
     const hullGroup = g.append("g").attr("class", "hull-group");
@@ -869,15 +1025,25 @@ export function renderGraphHtml(graphData, options = {}) {
         .on("drag", dragged)
         .on("end", dragended));
 
-    // Node background plate (rounded rect behind icon)
+    // Node background plate (rounded rect behind icon — size varies by degree)
     nodeElements.append("rect")
-      .attr("x", -22).attr("y", -22)
-      .attr("width", 44).attr("height", 44)
+      .attr("x", d => -(d._radius || 22)).attr("y", d => -(d._radius || 22))
+      .attr("width", d => (d._radius || 22) * 2).attr("height", d => (d._radius || 22) * 2)
       .attr("rx", 10).attr("ry", 10)
       .attr("fill", "white")
       .attr("stroke", d => nodeColors[d.type]?.stroke || "#ccc")
       .attr("stroke-width", 1.5)
       .attr("filter", "url(#node-shadow)");
+
+    // Hot-spot pulse ring (only for nodes with attention needed)
+    nodeElements.filter(d => d._hotspotSeverity >= 2)
+      .insert("circle", ":first-child")
+      .attr("class", "hotspot-ring")
+      .attr("cx", 0).attr("cy", 0)
+      .attr("r", d => (d._radius || 22) + 4)
+      .attr("fill", "none")
+      .attr("stroke", d => d._hotspotSeverity === 3 ? "oklch(0.60 0.19 50)" : "oklch(0.55 0.15 200)")
+      .attr("stroke-width", 2);
 
     // Icon via foreignObject (like original)
     nodeElements.append("foreignObject")
@@ -963,6 +1129,21 @@ export function renderGraphHtml(graphData, options = {}) {
       let html = '<span class="node-badge" style="background:' + colors.fill + '">' + smallIcon + ' ' + colors.fullLabel + '</span>';
       html += '<div class="node-id-text">' + node.id + '</div>';
       html += '<h3 class="node-title">' + escapeHtml(node.label) + '</h3>';
+
+      // Hot-spot insight
+      if (node._hotspot) {
+        const insights = {
+          orphaned: { icon: '⚠', color: 'oklch(0.55 0.19 50)', text: 'Orphaned — no linked needs. This problem lacks traceability to requirements.' },
+          unmet: { icon: '⚠', color: 'oklch(0.55 0.15 200)', text: 'Unmet — no linked requirements. This need has no FR/NFR addressing it.' },
+          hub: { icon: '◉', color: 'oklch(0.45 0.15 145)', text: 'Hub — high connectivity (' + node._degree + ' connections). Key node in the dependency graph.' },
+          isolated: { icon: '⊘', color: 'oklch(0.55 0.19 50)', text: 'Isolated — no connections at all. This node is disconnected from the spec.' }
+        };
+        const insight = insights[node._hotspot];
+        if (insight) {
+          html += '<div style="margin:var(--space-md) 0;padding:var(--space-sm) var(--space-md);border-radius:6px;background:oklch(0.97 0.01 50);border:1px solid oklch(0.90 0.03 50);font-size:12px;line-height:1.5;color:' + insight.color + '">' + insight.icon + ' ' + insight.text + '</div>';
+        }
+      }
+
       html += '<div class="separator"></div>';
       html += '<div class="section-title">Description</div>';
       html += '<p class="description">' + escapeHtml(node.data?.description || 'No description available.') + '</p>';
@@ -1080,7 +1261,8 @@ export function renderGraphHtml(graphData, options = {}) {
         const matchesSearch = !searchTerm || d.id.toLowerCase().includes(searchTerm) || d.label.toLowerCase().includes(searchTerm);
         const isSelected = d.id === selectedNode;
         const isDownstream = downstreamIds.has(d.id);
-        const shouldDim = (isFiltered && !isDownstream) || (searchTerm && !matchesSearch);
+        const matchesHotspot = !hotspotFilter || d._hotspot === hotspotFilter;
+        const shouldDim = (isFiltered && !isDownstream) || (searchTerm && !matchesSearch) || (hotspotFilter && !matchesHotspot);
 
         if (!shouldDim && searchTerm && matchesSearch && !firstMatch) firstMatch = d;
 
@@ -1092,25 +1274,33 @@ export function renderGraphHtml(graphData, options = {}) {
 
         el.select("foreignObject")
           .transition().duration(250)
-          .attr("opacity", shouldDim ? 0.2 : 1);
+          .attr("opacity", shouldDim ? 0.15 : 1);
 
         el.selectAll("text")
           .transition().duration(250)
-          .attr("opacity", shouldDim ? 0.2 : 1);
+          .attr("opacity", shouldDim ? 0.15 : 1);
+
+        // Hot-spot ring visibility
+        el.select(".hotspot-ring")
+          .transition().duration(250)
+          .attr("opacity", shouldDim ? 0 : 1);
       });
 
       linkElements.each(function(d) {
         const src = typeof d.source === "object" ? d.source.id : d.source;
         const tgt = typeof d.target === "object" ? d.target.id : d.target;
-        const srcVisible = visibleTypes.has(nodes.find(n => n.id === src)?.type);
-        const tgtVisible = visibleTypes.has(nodes.find(n => n.id === tgt)?.type);
+        const srcNode = nodes.find(n => n.id === src);
+        const tgtNode = nodes.find(n => n.id === tgt);
+        const srcVisible = visibleTypes.has(srcNode?.type);
+        const tgtVisible = visibleTypes.has(tgtNode?.type);
         const linkKey = src + "->" + tgt;
         const isDownstream = downstreamLinkPairs.has(linkKey);
         const bothVisible = srcVisible && tgtVisible;
+        const matchesHotspot = !hotspotFilter || (srcNode?._hotspot === hotspotFilter || tgtNode?._hotspot === hotspotFilter);
 
         d3.select(this)
           .transition().duration(250)
-          .attr("stroke-opacity", isDownstream ? 0.9 : (bothVisible ? 0.4 : 0.1))
+          .attr("stroke-opacity", isDownstream ? 0.9 : (bothVisible && matchesHotspot ? 0.4 : (hotspotFilter ? 0.05 : 0.35)))
           .attr("stroke", isDownstream ? "oklch(0.65 0.15 200)" : "oklch(0.65 0.05 240)")
           .attr("stroke-width", isDownstream ? 3 : 2)
           .style("display", bothVisible || isDownstream ? null : "none");
@@ -1123,6 +1313,21 @@ export function renderGraphHtml(graphData, options = {}) {
         const y = firstMatch.y || height / 2;
         const transform = d3.zoomIdentity.translate(width/2, height/2).scale(scale).translate(-x, -y);
         svg.transition().duration(750).call(zoom.transform, transform);
+      }
+
+      // Auto-zoom to hotspot group
+      if (hotspotFilter && !searchTerm && !selectedNode) {
+        const hotNodes = nodes.filter(n => n._hotspot === hotspotFilter && n.x != null);
+        if (hotNodes.length > 0) {
+          const xs = hotNodes.map(n => n.x);
+          const ys = hotNodes.map(n => n.y);
+          const cx = (Math.min(...xs) + Math.max(...xs)) / 2;
+          const cy = (Math.min(...ys) + Math.max(...ys)) / 2;
+          const span = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys), 200);
+          const scale = Math.min(width, height) / (span + 200);
+          const transform = d3.zoomIdentity.translate(width/2, height/2).scale(Math.min(scale, 2)).translate(-cx, -cy);
+          svg.transition().duration(750).call(zoom.transform, transform);
+        }
       }
     }
 
