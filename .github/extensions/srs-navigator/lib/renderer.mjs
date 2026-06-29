@@ -2283,7 +2283,7 @@ export function renderGraphHtml(graphData, options = {}) {
           showToast('✓ Synced ' + updatedCount + ' skill' + (updatedCount !== 1 ? 's' : '') + ' from GitHub');
         } else {
           const detail = data.failed && data.failed.length
-            ? data.failed.map(f => f.file + ': ' + f.error).join('\n')
+            ? data.failed.map(f => f.file + ': ' + f.error).join('\\n')
             : (data.error || 'Unknown error');
           const msg = updatedCount
             ? 'Synced ' + updatedCount + ', some skills failed'
