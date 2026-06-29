@@ -69,6 +69,13 @@ describe("renderGraphHtml", () => {
     assert.ok(html.includes('class="btn active" data-mode="implementation"'));
   });
 
+  it("includes a Sync Skills button wired to the sync-skills API", () => {
+    const html = renderGraphHtml(sampleGraph);
+    assert.ok(html.includes('id="modal-btn-sync-skills"'));
+    assert.ok(html.includes("Sync Skills"));
+    assert.ok(html.includes("/api/sync-skills"));
+  });
+
   it("includes search input with placeholder", () => {
     const html = renderGraphHtml(sampleGraph);
     assert.ok(html.includes('id="search"'));

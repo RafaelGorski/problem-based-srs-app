@@ -17,6 +17,7 @@ import { DEMO_SPEC } from "./lib/demo-spec.mjs";
 import { compileAndSave } from "./lib/spec-compiler.mjs";
 import { decomposeNode } from "./lib/decompose.mjs";
 import { isTrustedLoopbackRequest } from "./lib/http-guard.mjs";
+import { syncSkills } from "./lib/skill-sync.mjs";
 
 // Content fingerprint of a graph, used to detect *any* change to the loaded
 // specification (not just node/link count changes) so the canvas can reload
@@ -400,6 +401,22 @@ function createCanvasServer(instanceId, fallbackHtml, workspacePath) {
                 } catch (e) {
                     const isJsonError = e instanceof SyntaxError;
                     sendJson(res, { ok: false, error: isJsonError ? "Invalid JSON" : "Failed to send to agent", detail: e.message }, isJsonError ? 400 : 500);
+                }
+            })();
+            return;
+        }
+
+        if (req.url === "/api/sync-skills" && req.method === "POST") {
+            (async () => {
+                try {
+                    const result = await syncSkills({
+                        files: SKILLS.map((s) => s.file),
+                        skillsDir,
+                        writeFileImpl: writeFile,
+                    });
+                    sendJson(res, { ok: result.failed.length === 0, ...result });
+                } catch (e) {
+                    sendJson(res, { ok: false, error: e.message }, 500);
                 }
             })();
             return;
