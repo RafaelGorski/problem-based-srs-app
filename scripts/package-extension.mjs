@@ -118,7 +118,6 @@ function main() {
 
   if (process.env.GITHUB_OUTPUT && existsSync(process.env.GITHUB_OUTPUT)) {
     appendFileSync(process.env.GITHUB_OUTPUT, `version=${version}\n`);
-    appendFileSync(process.env.GITHUB_OUTPUT, `artifacts=${artifacts.join("\n")}\n`);
   }
 
   console.log(`\nPackaged ${base}: ${artifacts.length} archive(s).`);
