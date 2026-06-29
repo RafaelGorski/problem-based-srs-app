@@ -36,9 +36,14 @@ const EXCLUDE = new Set([
   "node_modules",
   "test-results",
   "playwright-report",
+  "tests",
+  "docs",
 ]);
 const EXCLUDE_FILES = new Set([
   ".sync-state.json", // skills/.sync-state.json — per-machine runtime state
+  "playwright.config.mjs",
+  "README.md",
+  ".gitignore",
 ]);
 
 function parseArgs(argv) {
