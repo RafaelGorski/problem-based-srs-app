@@ -270,6 +270,30 @@ Share the srs-navigator extension as a gist
 - [Problem-Based SRS Methodology](https://github.com/RafaelGorski/Problem-Based-SRS)
 - [Problem-Based SRS Navigator (original web app)](https://github.com/RafaelGorski/problem-based-srs-na)
 
+## Releases
+
+Releases are produced by the **Release Canvas Extension** GitHub Actions workflow
+(`.github/workflows/release.yml`). Trigger it from the **Actions** tab (Run
+workflow → choose `patch`/`minor`/`major`). The pipeline:
+
+1. Runs the extension unit test suite.
+2. Downloads the latest methodology skills from the upstream
+   [Problem-Based-SRS](https://github.com/RafaelGorski/Problem-Based-SRS) repo
+   (`scripts/sync-skills.mjs`).
+3. Bumps an incremental project version (`scripts/bump-version.mjs`) — updating
+   `package.json`, `copilot-extension.json`, and `VERSION` — and pushes a `vX.Y.Z` tag.
+4. Packages the extension into `.tar.gz` / `.zip` archives
+   (`scripts/package-extension.mjs`, excluding `node_modules`/test output).
+5. Publishes a GitHub Release with the archives attached.
+
+Run the steps locally with:
+
+```bash
+node .github/extensions/srs-navigator/scripts/sync-skills.mjs   # download skills
+node scripts/bump-version.mjs --part patch --dry-run            # preview next version
+node scripts/package-extension.mjs --version 1.0.1              # build archives
+```
+
 ## License
 
 See repository license.

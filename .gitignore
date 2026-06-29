@@ -1,4 +1,7 @@
 .impeccable/
 
+# Release packaging output
+build/
+
 # Skills sync runtime state (auto-generated, per-machine)
 .github/extensions/srs-navigator/skills/.sync-state.json
