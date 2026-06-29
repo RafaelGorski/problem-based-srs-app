@@ -32,6 +32,19 @@ describe("renderGraphHtml", () => {
     assert.ok(html.includes('"addresses"'));
   });
 
+  it("escapes </script> sequences in embedded graph JSON to prevent script injection", () => {
+    const malicious = {
+      nodes: [
+        { id: "CP-1", type: "problem", label: "</script><img src=x onerror=alert(1)>", data: { description: "x" }, complexity: 1 }
+      ],
+      links: []
+    };
+    const html = renderGraphHtml(malicious);
+    // The raw closing-script sequence must not appear inside the embedded data
+    assert.ok(!html.includes("</script><img"), "raw </script> must be neutralized");
+    assert.ok(html.includes("\\u003c"), "< should be unicode-escaped in embedded JSON");
+  });
+
   it("uses the provided title in spec button", () => {
     const html = renderGraphHtml(sampleGraph, { title: "My Custom Title" });
     assert.ok(html.includes("My Custom Title"));

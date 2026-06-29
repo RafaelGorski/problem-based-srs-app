@@ -4,7 +4,7 @@
 // Also provides Problem-Based SRS methodology skills as tools.
 
 import { createServer } from "node:http";
-import { readFile, readdir } from "node:fs/promises";
+import { readFile, readdir, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { resolve, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -15,6 +15,7 @@ import { validateSpecificationJSON, validateReferenceIntegrity } from "./lib/val
 import { renderGraphHtml } from "./lib/renderer.mjs";
 import { DEMO_SPEC } from "./lib/demo-spec.mjs";
 import { compileAndSave, compileSpecFromFolder } from "./lib/spec-compiler.mjs";
+import { decomposeNode } from "./lib/decompose.mjs";
 
 // Content fingerprint of a graph, used to detect *any* change to the loaded
 // specification (not just node/link count changes) so the canvas can reload
@@ -128,29 +129,6 @@ const instances = new Map();
 
 // Pending action queues per instance (browser → agent communication)
 const pendingActions = new Map();
-
-async function startServer(instanceId, graphData, specName) {
-    const html = renderGraphHtml(graphData, { title: specName });
-
-    const server = createServer((req, res) => {
-        if (req.url === "/api/state") {
-            res.setHeader("Content-Type", "application/json");
-            const entry = instances.get(instanceId);
-            res.end(JSON.stringify({
-                specName: entry?.specName || specName,
-                nodeCount: entry?.graphData?.nodes?.length || 0,
-                linkCount: entry?.graphData?.links?.length || 0,
-            }));
-            return;
-        }
-        res.setHeader("Content-Type", "text/html; charset=utf-8");
-        res.end(entry?.html || html);
-    });
-
-    await new Promise((r) => server.listen(0, "127.0.0.1", r));
-    const port = server.address().port;
-    return { server, url: `http://127.0.0.1:${port}/`, html };
-}
 
 function loadAndBuildGraph(specJSON) {
     const validation = validateSpecificationJSON(specJSON);
@@ -268,6 +246,183 @@ async function reloadInstanceFromSource(inst, workspacePath) {
     inst.isLanding = false;
     if (result.filePath) inst.sourceFilePath = result.filePath;
     return true;
+}
+
+// --- Agent prompts shared by the landing overlay and the graph action bar ---
+const LEARN_PROMPT = [
+    "## SRS Navigator: Learn & Create Specification",
+    "",
+    "The user wants to create a Problem-Based SRS specification for their project.",
+    "Use the `problem_based_srs` tool to run the full methodology.",
+    "Scan the workspace for existing code, README, and documentation to provide context.",
+    "",
+    "**IMPORTANT:** After generating all the .spec/ markdown artifacts (customer problems, needs, requirements),",
+    "you MUST also generate a consolidated JSON specification file at `.spec/<project-name>.json` with this shape:",
+    '{ "name", "version", "problems":[{id,title,description}], "needs":[{id,title,description,problemIds}],',
+    '  "functionalRequirements":[{id,title,description,needIds}], "nonFunctionalRequirements":[{id,title,description,needIds}] }',
+    "",
+    "**CRITICAL - Display the graph:** After creating the JSON file, use the `load_specification` canvas action",
+    "with the ABSOLUTE file path to the JSON file. Do NOT skip this step — the graph will not auto-refresh without it.",
+].join("\n");
+
+const LOAD_PROMPT = [
+    "## SRS Navigator: Load Specification",
+    "",
+    "The user wants to load an existing specification file.",
+    "Look for .spec/*.json files in the workspace, or ask the user which file to load.",
+    "Then use the `load_specification` canvas action to display it.",
+].join("\n");
+
+function buildActionPrompt(action) {
+    return [
+        `## SRS Navigator Action: ${action.action}`,
+        `**Skill:** ${action.skill}`,
+        `**Node:** ${action.nodeId} (${action.nodeType}) — "${action.nodeLabel}"`,
+        `**Context:** ${action.context}`,
+        "",
+        "Use the `" + action.skill + "` tool with the context above to process this request.",
+        "After generating the result, use the `load_specification` canvas action to update the graph if the specification changes.",
+    ].join("\n");
+}
+
+const sendJson = (res, obj, status = 200) => {
+    res.statusCode = status;
+    res.setHeader("Content-Type", "application/json");
+    res.end(JSON.stringify(obj));
+};
+
+const readBody = (req) => new Promise((resolveBody) => {
+    let body = "";
+    req.on("data", (c) => { body += c; });
+    req.on("end", () => resolveBody(body));
+});
+
+// Single HTTP server used for both the landing overlay and the graph view.
+// All instances share the same route table; the only per-instance difference
+// is the fallback HTML and the resolved workspace path.
+function createCanvasServer(instanceId, fallbackHtml, workspacePath) {
+    return createServer((req, res) => {
+        const inst = instances.get(instanceId);
+
+        if (req.url === "/api/check-spec" && req.method === "GET") {
+            (async () => {
+                try {
+                    if (inst && !inst.isLanding) return sendJson(res, { found: true, specName: inst.specName });
+                    const result = workspacePath ? await loadFromSpecFolder(workspacePath) : null;
+                    if (inst && result) {
+                        inst.graphData = result.graphData;
+                        inst.specName = result.specName;
+                        inst.html = renderGraphHtml(result.graphData, { title: result.specName, isDemo: false });
+                        inst.isLanding = false;
+                        inst.sourceFilePath = result.filePath || null;
+                        return sendJson(res, { found: true, specName: result.specName });
+                    }
+                    sendJson(res, { found: false });
+                } catch { sendJson(res, { found: false }); }
+            })();
+            return;
+        }
+
+        if (req.url === "/api/landing-action" && req.method === "POST") {
+            (async () => {
+                try {
+                    const { action } = JSON.parse(await readBody(req));
+                    if (action === "demo") {
+                        const result = loadAndBuildGraph(DEMO_SPEC);
+                        if (inst) {
+                            inst.graphData = result.graphData;
+                            inst.specName = result.specName;
+                            inst.html = renderGraphHtml(result.graphData, { title: result.specName, isDemo: true });
+                            inst.isLanding = false;
+                        }
+                        sendJson(res, { ok: true, reload: true });
+                    } else if (action === "learn") {
+                        await session.send({ prompt: LEARN_PROMPT });
+                        sendJson(res, { ok: true, sent: true });
+                    } else if (action === "load") {
+                        await session.send({ prompt: LOAD_PROMPT });
+                        sendJson(res, { ok: true, sent: true });
+                    } else {
+                        sendJson(res, { ok: false, error: "Unknown action" }, 400);
+                    }
+                } catch (e) { sendJson(res, { ok: false, error: e.message }, 500); }
+            })();
+            return;
+        }
+
+        if (req.url === "/api/invoke-skill" && req.method === "POST") {
+            (async () => {
+                try {
+                    const action = JSON.parse(await readBody(req));
+                    const actionId = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+                    await session.send({ prompt: buildActionPrompt(action) });
+                    if (!pendingActions.has(instanceId)) pendingActions.set(instanceId, []);
+                    pendingActions.get(instanceId).push({ id: actionId, timestamp: new Date().toISOString(), status: "sent", ...action });
+                    sendJson(res, { ok: true, sent: true, actionId });
+                } catch (e) {
+                    const isJsonError = e instanceof SyntaxError;
+                    sendJson(res, { ok: false, error: isJsonError ? "Invalid JSON" : "Failed to send to agent", detail: e.message }, isJsonError ? 400 : 500);
+                }
+            })();
+            return;
+        }
+
+        if (req.url === "/api/decompose" && req.method === "POST") {
+            (async () => {
+                try {
+                    const { nodeId } = JSON.parse(await readBody(req));
+                    if (!inst || !nodeId) return sendJson(res, { ok: false, added: 0 });
+                    const base = graphToSpec(inst.graphData);
+                    const result = decomposeNode(base, String(nodeId).toUpperCase());
+                    if (!result.added.length) return sendJson(res, { ok: true, added: 0 });
+                    const built = loadAndBuildGraph({ name: inst.specName, version: "1.0", ...result.spec });
+                    inst.graphData = built.graphData;
+                    inst.html = renderGraphHtml(built.graphData, { title: inst.specName, isDemo: false });
+                    inst.isLanding = false;
+                    if (inst.sourceFilePath) {
+                        try { await writeFile(inst.sourceFilePath, JSON.stringify({ name: inst.specName, version: "1.0", ...result.spec }, null, 2), "utf-8"); } catch { /* best-effort */ }
+                    }
+                    sendJson(res, { ok: true, added: result.added.length, ids: result.added.map(i => i.id) });
+                } catch (e) { sendJson(res, { ok: false, added: 0, error: e.message }, 400); }
+            })();
+            return;
+        }
+
+        if (req.url === "/api/pending-actions") {
+            sendJson(res, { actions: pendingActions.get(instanceId) || [] });
+            return;
+        }
+
+        if (req.url === "/api/refresh-spec" && req.method === "GET") {
+            (async () => {
+                try {
+                    if (!inst) return sendJson(res, { refreshed: false });
+                    await reloadInstanceFromSource(inst, workspacePath);
+                    sendJson(res, {
+                        refreshed: graphSignature(inst.graphData) !== (inst.servedSignature || ""),
+                        specName: inst.specName,
+                        nodeCount: inst.graphData?.nodes?.length || 0,
+                        linkCount: inst.graphData?.links?.length || 0,
+                    });
+                } catch { sendJson(res, { refreshed: false }); }
+            })();
+            return;
+        }
+
+        if (req.url === "/api/state") {
+            sendJson(res, {
+                specName: inst?.specName || null,
+                nodeCount: inst?.graphData?.nodes?.length || 0,
+                linkCount: inst?.graphData?.links?.length || 0,
+                isLanding: inst?.isLanding || false,
+            });
+            return;
+        }
+
+        res.setHeader("Content-Type", "text/html; charset=utf-8");
+        if (inst) inst.servedSignature = graphSignature(inst.graphData);
+        res.end(inst?.html || fallbackHtml);
+    });
 }
 
 const session = await joinSession({
@@ -584,6 +739,47 @@ const session = await joinSession({
                             message: `Compiled and loaded specification from ${filePath}`
                         };
                     }
+                },
+                {
+                    name: "decompose_node",
+                    description: "Locally split a node into child requirements from its description sentences — no model round-trip. Fast iteration for breaking a CP/CN/FR/NFR into smaller items. Updates the loaded graph and persists to the source JSON file when known.",
+                    inputSchema: {
+                        type: "object",
+                        properties: {
+                            nodeId: { type: "string", description: "The node ID to decompose (e.g., FR-1, CN-2)" }
+                        },
+                        required: ["nodeId"]
+                    },
+                    handler: async (ctx) => {
+                        const entry = instances.get(ctx.instanceId);
+                        if (!entry) throw new CanvasError("not_open", "Canvas instance not found");
+
+                        const baseSpec = graphToSpec(entry.graphData);
+                        const nodeId = ctx.input.nodeId.toUpperCase();
+                        let result;
+                        try {
+                            result = decomposeNode(baseSpec, nodeId);
+                        } catch (e) {
+                            throw new CanvasError("not_found", e.message);
+                        }
+                        if (!result.added.length) {
+                            return { added: 0, message: `Node ${nodeId} has no decomposable sub-items` };
+                        }
+
+                        const built = loadAndBuildGraph({ name: entry.specName, version: "1.0", ...result.spec });
+                        entry.graphData = built.graphData;
+                        entry.html = renderGraphHtml(built.graphData, { title: entry.specName, isDemo: false });
+                        entry.isLanding = false;
+                        if (entry.sourceFilePath) {
+                            try { await writeFile(entry.sourceFilePath, JSON.stringify({ name: entry.specName, version: "1.0", ...result.spec }, null, 2), "utf-8"); } catch { /* best-effort persist */ }
+                        }
+                        return {
+                            added: result.added.length,
+                            ids: result.added.map(i => i.id),
+                            nodeCount: built.graphData.nodes.length,
+                            message: `Decomposed ${nodeId} into ${result.added.length} item(s) locally`
+                        };
+                    }
                 }
             ],
             open: async (ctx) => {
@@ -635,224 +831,7 @@ const session = await joinSession({
                         });
                         const workspacePathResolved = derivedWorkspacePath || ctx.host?.workspacePath || process.env.COPILOT_WORKSPACE_PATH || "";
 
-                        const server = createServer((req, res) => {
-                            const inst = instances.get(ctx.instanceId);
-
-                            if (req.url === "/api/check-spec" && req.method === "GET") {
-                                // Polling endpoint: check if spec was loaded via action OR appeared in .spec/
-                                (async () => {
-                                    try {
-                                        // If load_specification already loaded a spec, signal reload
-                                        if (inst && !inst.isLanding) {
-                                            res.setHeader("Content-Type", "application/json");
-                                            res.end(JSON.stringify({ found: true, specName: inst.specName }));
-                                            return;
-                                        }
-                                        const result = workspacePathResolved ? await loadFromSpecFolder(workspacePathResolved) : null;
-                                        if (result) {
-                                            // Spec found — switch to graph view
-                                            const html = renderGraphHtml(result.graphData, { title: result.specName, isDemo: false });
-                                            inst.graphData = result.graphData;
-                                            inst.specName = result.specName;
-                                            inst.html = html;
-                                            inst.isLanding = false;
-                                            inst.sourceFilePath = result.filePath || null;
-                                            res.setHeader("Content-Type", "application/json");
-                                            res.end(JSON.stringify({ found: true, specName: result.specName }));
-                                        } else {
-                                            res.setHeader("Content-Type", "application/json");
-                                            res.end(JSON.stringify({ found: false }));
-                                        }
-                                    } catch {
-                                        res.setHeader("Content-Type", "application/json");
-                                        res.end(JSON.stringify({ found: false }));
-                                    }
-                                })();
-                                return;
-                            }
-
-                            if (req.url === "/api/landing-action" && req.method === "POST") {
-                                let body = "";
-                                req.on("data", (chunk) => { body += chunk; });
-                                req.on("end", async () => {
-                                    try {
-                                        const { action } = JSON.parse(body);
-
-                                        if (action === "demo") {
-                                            // Load demo spec and switch to graph view
-                                            const result = loadAndBuildGraph(DEMO_SPEC);
-                                            const html = renderGraphHtml(result.graphData, { title: result.specName, isDemo: true });
-                                            inst.graphData = result.graphData;
-                                            inst.specName = result.specName;
-                                            inst.html = html;
-                                            inst.isLanding = false;
-                                            res.setHeader("Content-Type", "application/json");
-                                            res.end(JSON.stringify({ ok: true, reload: true }));
-                                        } else if (action === "learn") {
-                                            // Send learn prompt to agent session
-                                            const prompt = [
-                                                "## SRS Navigator: Learn & Create Specification",
-                                                "",
-                                                "The user wants to create a Problem-Based SRS specification for their project.",
-                                                "Use the `problem_based_srs` tool to run the full methodology.",
-                                                "Scan the workspace for existing code, README, and documentation to provide context.",
-                                                "",
-                                                "**IMPORTANT:** After generating all the .spec/ markdown artifacts (customer problems, needs, requirements),",
-                                                "you MUST also generate a consolidated JSON specification file at `.spec/<project-name>.json`",
-                                                "following this structure:",
-                                                "```json",
-                                                '{',
-                                                '  "name": "Project Name",',
-                                                '  "version": "1.0",',
-                                                '  "problems": [{ "id": "CP-1", "title": "...", "description": "..." }],',
-                                                '  "needs": [{ "id": "CN-1", "title": "...", "description": "...", "problemIds": ["CP-1"] }],',
-                                                '  "functionalRequirements": [{ "id": "FR-1", "title": "...", "description": "...", "needIds": ["CN-1"] }],',
-                                                '  "nonFunctionalRequirements": [{ "id": "NFR-1", "title": "...", "description": "...", "needIds": ["CN-1"] }]',
-                                                '}',
-                                                "```",
-                                                "",
-                                                "**CRITICAL - Display the graph:** After creating the JSON file, you MUST use the `load_specification` canvas action",
-                                                "with the ABSOLUTE file path to the JSON file (e.g., filePath: \"/full/path/to/.spec/project-name.json\").",
-                                                "This will load the specification into the SRS Navigator graph and display it to the user.",
-                                                "Do NOT skip this step — the graph will not auto-refresh without it.",
-                                            ].join("\n");
-                                            await session.send({ prompt });
-                                            res.setHeader("Content-Type", "application/json");
-                                            res.end(JSON.stringify({ ok: true, sent: true }));
-                                        } else if (action === "load") {
-                                            // Send load prompt to agent session
-                                            const prompt = [
-                                                "## SRS Navigator: Load Specification",
-                                                "",
-                                                "The user wants to load an existing specification file.",
-                                                "Look for .spec/*.json files in the workspace, or ask the user which file to load.",
-                                                "Then use the `load_specification` canvas action to display it.",
-                                            ].join("\n");
-                                            await session.send({ prompt });
-                                            res.setHeader("Content-Type", "application/json");
-                                            res.end(JSON.stringify({ ok: true, sent: true }));
-                                        } else {
-                                            res.statusCode = 400;
-                                            res.setHeader("Content-Type", "application/json");
-                                            res.end(JSON.stringify({ ok: false, error: "Unknown action" }));
-                                        }
-                                    } catch (e) {
-                                        res.statusCode = 500;
-                                        res.setHeader("Content-Type", "application/json");
-                                        res.end(JSON.stringify({ ok: false, error: e.message }));
-                                    }
-                                });
-                                return;
-                            }
-
-                            // Action bar invoke-skill route (needed after graph loads via load_specification)
-                            if (req.url === "/api/invoke-skill" && req.method === "POST") {
-                                let body = "";
-                                req.on("data", (chunk) => { body += chunk; });
-                                req.on("end", async () => {
-                                    try {
-                                        const action = JSON.parse(body);
-                                        const actionId = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-
-                                        let skillContent = "";
-                                        try {
-                                            const skillDef = SKILLS.find(s => s.name === action.skill);
-                                            if (skillDef) {
-                                                skillContent = await readFile(resolve(skillsDir, skillDef.file), "utf-8");
-                                            }
-                                        } catch { /* non-fatal */ }
-
-                                        const prompt = [
-                                            `## SRS Navigator Action: ${action.action}`,
-                                            `**Skill:** ${action.skill}`,
-                                            `**Node:** ${action.nodeId} (${action.nodeType}) — "${action.nodeLabel}"`,
-                                            `**Context:** ${action.context}`,
-                                            "",
-                                            "Use the `" + action.skill + "` tool with the context above to process this request.",
-                                            "After generating the result, use the `load_specification` canvas action to update the graph if the specification changes.",
-                                        ].join("\n");
-
-                                        await session.send({ prompt });
-
-                                        if (!pendingActions.has(ctx.instanceId)) {
-                                            pendingActions.set(ctx.instanceId, []);
-                                        }
-                                        pendingActions.get(ctx.instanceId).push({
-                                            id: actionId,
-                                            timestamp: new Date().toISOString(),
-                                            status: "sent",
-                                            ...action,
-                                        });
-
-                                        res.setHeader("Content-Type", "application/json");
-                                        res.end(JSON.stringify({ ok: true, sent: true, actionId }));
-                                    } catch (e) {
-                                        const isJsonError = e instanceof SyntaxError;
-                                        res.statusCode = isJsonError ? 400 : 500;
-                                        res.setHeader("Content-Type", "application/json");
-                                        res.end(JSON.stringify({
-                                            ok: false,
-                                            error: isJsonError ? "Invalid JSON" : "Failed to send to agent",
-                                            detail: e.message,
-                                        }));
-                                    }
-                                });
-                                return;
-                            }
-
-                            if (req.url === "/api/pending-actions") {
-                                res.setHeader("Content-Type", "application/json");
-                                const queue = pendingActions.get(ctx.instanceId) || [];
-                                res.end(JSON.stringify({ actions: queue }));
-                                return;
-                            }
-
-                            if (req.url === "/api/refresh-spec" && req.method === "GET") {
-                                (async () => {
-                                    try {
-                                        if (!inst) {
-                                            res.setHeader("Content-Type", "application/json");
-                                            res.end(JSON.stringify({ refreshed: false }));
-                                            return;
-                                        }
-                                        // Reload from the same source the agent loaded (sourceFilePath),
-                                        // falling back to a .spec/ folder scan. This keeps the refresh
-                                        // button / poll in lock-step with load_specification.
-                                        await reloadInstanceFromSource(inst, workspacePathResolved);
-                                        // Reload whenever the loaded graph differs from what the
-                                        // browser currently displays — covers on-disk edits and the
-                                        // out-of-band load_specification action.
-                                        const refreshed = graphSignature(inst.graphData) !== (inst.servedSignature || "");
-                                        res.setHeader("Content-Type", "application/json");
-                                        res.end(JSON.stringify({
-                                            refreshed,
-                                            specName: inst.specName,
-                                            nodeCount: inst.graphData?.nodes?.length || 0,
-                                            linkCount: inst.graphData?.links?.length || 0,
-                                        }));
-                                    } catch {
-                                        res.setHeader("Content-Type", "application/json");
-                                        res.end(JSON.stringify({ refreshed: false }));
-                                    }
-                                })();
-                                return;
-                            }
-
-                            if (req.url === "/api/state") {
-                                res.setHeader("Content-Type", "application/json");
-                                res.end(JSON.stringify({
-                                    specName: inst?.specName || null,
-                                    nodeCount: inst?.graphData?.nodes?.length || 0,
-                                    linkCount: inst?.graphData?.links?.length || 0,
-                                    isLanding: inst?.isLanding || false,
-                                }));
-                                return;
-                            }
-
-                            res.setHeader("Content-Type", "text/html; charset=utf-8");
-                            if (inst) inst.servedSignature = graphSignature(inst.graphData);
-                            res.end(inst?.html || landingHtml);
-                        });
+                        const server = createCanvasServer(ctx.instanceId, landingHtml, workspacePathResolved);
 
                         await new Promise((r) => server.listen(0, "127.0.0.1", r));
                         const url = `http://127.0.0.1:${server.address().port}/`;
@@ -869,180 +848,8 @@ const session = await joinSession({
                     isDemo
                 });
 
-                const server = createServer((req, res) => {
-                    const inst = instances.get(ctx.instanceId);
-
-                    if (req.url === "/api/invoke-skill" && req.method === "POST") {
-                        let body = "";
-                        req.on("data", (chunk) => { body += chunk; });
-                        req.on("end", async () => {
-                            try {
-                                const action = JSON.parse(body);
-                                const actionId = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-
-                                // Read the skill file for context
-                                let skillContent = "";
-                                try {
-                                    const skillDef = SKILLS.find(s => s.name === action.skill);
-                                    if (skillDef) {
-                                        skillContent = await readFile(resolve(skillsDir, skillDef.file), "utf-8");
-                                    }
-                                } catch { /* non-fatal */ }
-
-                                // Build the prompt for the agent
-                                const prompt = [
-                                    `## SRS Navigator Action: ${action.action}`,
-                                    `**Skill:** ${action.skill}`,
-                                    `**Node:** ${action.nodeId} (${action.nodeType}) — "${action.nodeLabel}"`,
-                                    `**Context:** ${action.context}`,
-                                    "",
-                                    "Use the `" + action.skill + "` tool with the context above to process this request.",
-                                    "After generating the result, use the `load_specification` canvas action to update the graph if the specification changes.",
-                                ].join("\n");
-
-                                // Send directly to the agent session
-                                await session.send({ prompt });
-
-                                // Also queue for reference
-                                if (!pendingActions.has(ctx.instanceId)) {
-                                    pendingActions.set(ctx.instanceId, []);
-                                }
-                                pendingActions.get(ctx.instanceId).push({
-                                    id: actionId,
-                                    timestamp: new Date().toISOString(),
-                                    status: "sent",
-                                    ...action,
-                                });
-
-                                res.setHeader("Content-Type", "application/json");
-                                res.end(JSON.stringify({ ok: true, sent: true, actionId }));
-                            } catch (e) {
-                                const isJsonError = e instanceof SyntaxError;
-                                res.statusCode = isJsonError ? 400 : 500;
-                                res.setHeader("Content-Type", "application/json");
-                                res.end(JSON.stringify({
-                                    ok: false,
-                                    error: isJsonError ? "Invalid JSON" : "Failed to send to agent",
-                                    detail: e.message,
-                                }));
-                            }
-                        });
-                        return;
-                    }
-
-                    if (req.url === "/api/pending-actions") {
-                        res.setHeader("Content-Type", "application/json");
-                        const queue = pendingActions.get(ctx.instanceId) || [];
-                        res.end(JSON.stringify({ actions: queue }));
-                        return;
-                    }
-
-                    if (req.url === "/api/refresh-spec" && req.method === "GET") {
-                        (async () => {
-                            try {
-                                if (!inst) {
-                                    res.setHeader("Content-Type", "application/json");
-                                    res.end(JSON.stringify({ refreshed: false }));
-                                    return;
-                                }
-                                const wp = derivedWorkspacePath || process.env.COPILOT_WORKSPACE_PATH || "";
-                                // Reload from the same source the agent loaded (sourceFilePath),
-                                // falling back to a .spec/ folder scan, so the refresh button / poll
-                                // stay in lock-step with load_specification.
-                                await reloadInstanceFromSource(inst, wp);
-                                // Reload whenever the loaded graph differs from what the browser
-                                // currently displays — covers on-disk edits and load_specification.
-                                const refreshed = graphSignature(inst.graphData) !== (inst.servedSignature || "");
-                                res.setHeader("Content-Type", "application/json");
-                                res.end(JSON.stringify({
-                                    refreshed,
-                                    specName: inst.specName,
-                                    nodeCount: inst.graphData?.nodes?.length || 0,
-                                    linkCount: inst.graphData?.links?.length || 0,
-                                }));
-                            } catch {
-                                res.setHeader("Content-Type", "application/json");
-                                res.end(JSON.stringify({ refreshed: false }));
-                            }
-                        })();
-                        return;
-                    }
-
-                    if (req.url === "/api/landing-action" && req.method === "POST") {
-                        let body = "";
-                        req.on("data", (chunk) => { body += chunk; });
-                        req.on("end", async () => {
-                            try {
-                                const { action } = JSON.parse(body);
-                                if (action === "demo") {
-                                    const result = loadAndBuildGraph(DEMO_SPEC);
-                                    const newHtml = renderGraphHtml(result.graphData, { title: result.specName, isDemo: true });
-                                    if (inst) {
-                                        inst.graphData = result.graphData;
-                                        inst.specName = result.specName;
-                                        inst.html = newHtml;
-                                        inst.isLanding = false;
-                                    }
-                                    res.setHeader("Content-Type", "application/json");
-                                    res.end(JSON.stringify({ ok: true, reload: true }));
-                                } else if (action === "learn") {
-                                    const prompt = [
-                                        "## SRS Navigator: Learn & Create Specification",
-                                        "",
-                                        "The user wants to create a Problem-Based SRS specification for their project.",
-                                        "Use the `problem_based_srs` tool to run the full methodology.",
-                                        "Scan the workspace for existing code, README, and documentation to provide context.",
-                                        "",
-                                        "**CRITICAL - Display the graph:** After creating the JSON file, you MUST use the `load_specification` canvas action",
-                                        "with the ABSOLUTE file path to the JSON file. Do NOT skip this step.",
-                                    ].join("\n");
-                                    await session.send({ prompt });
-                                    res.setHeader("Content-Type", "application/json");
-                                    res.end(JSON.stringify({ ok: true, sent: true }));
-                                } else if (action === "load") {
-                                    const prompt = [
-                                        "## SRS Navigator: Load Specification",
-                                        "",
-                                        "The user wants to load an existing specification file.",
-                                        "Look for .spec/*.json files in the workspace, or ask the user which file to load.",
-                                        "Then use the `load_specification` canvas action to display it.",
-                                    ].join("\n");
-                                    await session.send({ prompt });
-                                    res.setHeader("Content-Type", "application/json");
-                                    res.end(JSON.stringify({ ok: true, sent: true }));
-                                } else {
-                                    res.statusCode = 400;
-                                    res.setHeader("Content-Type", "application/json");
-                                    res.end(JSON.stringify({ ok: false, error: "Unknown action" }));
-                                }
-                            } catch (e) {
-                                res.statusCode = 500;
-                                res.setHeader("Content-Type", "application/json");
-                                res.end(JSON.stringify({ ok: false, error: e.message }));
-                            }
-                        });
-                        return;
-                    }
-
-                    if (req.url === "/api/check-spec" && req.method === "GET") {
-                        res.setHeader("Content-Type", "application/json");
-                        res.end(JSON.stringify({ found: true, specName: inst?.specName }));
-                        return;
-                    }
-
-                    if (req.url === "/api/state") {
-                        res.setHeader("Content-Type", "application/json");
-                        res.end(JSON.stringify({
-                            specName: inst?.specName,
-                            nodeCount: inst?.graphData?.nodes?.length || 0,
-                            linkCount: inst?.graphData?.links?.length || 0,
-                        }));
-                        return;
-                    }
-                    res.setHeader("Content-Type", "text/html; charset=utf-8");
-                    if (inst) inst.servedSignature = graphSignature(inst.graphData);
-                    res.end(inst?.html || html);
-                });
+                const wp = derivedWorkspacePath || ctx.host?.workspacePath || process.env.COPILOT_WORKSPACE_PATH || "";
+                const server = createCanvasServer(ctx.instanceId, html, wp);
 
                 await new Promise((r) => server.listen(0, "127.0.0.1", r));
                 const url = `http://127.0.0.1:${server.address().port}/`;
@@ -1062,6 +869,18 @@ const session = await joinSession({
         }),
     ],
 });
+
+// Reconstruct a spec object (problems/needs/FR/NFR) from in-memory graph data.
+// Used by decompose_node to operate on the displayed graph without re-reading disk.
+function graphToSpec(graphData) {
+    const spec = { problems: [], needs: [], functionalRequirements: [], nonFunctionalRequirements: [] };
+    const byType = { problem: spec.problems, need: spec.needs, fr: spec.functionalRequirements, nfr: spec.nonFunctionalRequirements };
+    for (const node of graphData.nodes) {
+        const bucket = byType[node.type];
+        if (bucket) bucket.push({ ...node.data, id: node.id, title: node.label });
+    }
+    return spec;
+}
 
 function summarizeGraph(graphData) {
     const types = { problem: 0, need: 0, fr: 0, nfr: 0 };

@@ -142,6 +142,7 @@ open_canvas({
 | `inspect_node` | Get details about a specific node by ID |
 | `get_summary` | Get node/link counts for the loaded spec |
 | `search_nodes` | Search nodes by ID or label text |
+| `decompose_node` | Split a node into child requirements locally (no model round-trip) |
 
 ## Architecture & Agent Integration
 
@@ -249,10 +250,10 @@ Run the test suite with Node.js built-in test runner:
 
 ```bash
 cd .github/extensions/srs-navigator
-node --test tests/parser.test.mjs tests/validation.test.mjs tests/renderer.test.mjs tests/action-bar.test.mjs tests/integration.test.mjs
+node --test tests/parser.test.mjs tests/validation.test.mjs tests/renderer.test.mjs tests/action-bar.test.mjs tests/integration.test.mjs tests/decompose.test.mjs
 ```
 
-Expected output: **117 tests passing** across the parser, validation, renderer, action-bar, and integration suites. (The Playwright-based `visual.test.mjs` requires `@playwright/test` to be installed separately.)
+Expected output: **125 tests passing** across the parser, validation, renderer, action-bar, integration, and decompose suites. (The Playwright-based `visual.test.mjs` runs separately via `npm run test:e2e`.)
 
 ## Requirements
 

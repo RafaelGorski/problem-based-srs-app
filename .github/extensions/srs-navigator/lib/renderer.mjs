@@ -23,7 +23,9 @@ const NODE_ICONS = {
  */
 export function renderGraphHtml(graphData, options = {}) {
   const { title = 'SRS Navigator', analysisMode = 'customer-problem', selectedNodeId = null, isDemo = false, showLanding = false } = options;
-  const graphJSON = JSON.stringify(graphData);
+  // Escape `<` to its unicode form so spec content cannot break out of the
+  // <script> block (e.g. a label containing "</script>") — prevents XSS.
+  const graphJSON = JSON.stringify(graphData).replace(/</g, "\\u003c").replace(/>/g, "\\u003e");
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -1787,6 +1789,28 @@ export function renderGraphHtml(graphData, options = {}) {
       }
 
       if (!context || !skillName) return;
+
+      // Fast local path: decompose deterministically on the server (no model
+      // round-trip) for instant iteration, then reload the graph.
+      if (actionKey.startsWith("decompose")) {
+        showToast("⏳ Decomposing " + node.id + "...", { variant: "pending", persistent: true });
+        fetch(location.origin + "/api/decompose", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ nodeId: node.id }),
+        }).then(async res => {
+          const data = await res.json().catch(() => ({}));
+          if (res.ok && data.ok && data.added > 0) {
+            showToast("✓ Added " + data.added + " sub-item(s) — reloading...");
+            setTimeout(() => window.location.reload(), 400);
+          } else if (data.added === 0) {
+            showToast("Nothing to decompose — add detail then retry", { variant: "info" });
+          } else {
+            showToast("Decompose failed", { variant: "error" });
+          }
+        }).catch(() => showToast("Decompose failed", { variant: "error" }));
+        return;
+      }
 
       // Show persistent pending status
       showToast("⏳ Sending to agent: " + skillName + " on " + node.id + "...", { variant: "pending", persistent: true });
