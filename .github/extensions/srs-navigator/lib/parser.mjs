@@ -1,6 +1,8 @@
 // Parser logic ported from the Problem-Based SRS Navigator
 // Parses markdown and JSON specifications into graph data structures
 
+import { extractRefs } from "./text-refs.mjs";
+
 const MAX_INPUT_SIZE = 2 * 1024 * 1024; // 2 MB
 
 /**
@@ -33,10 +35,6 @@ function parseSubItems(section) {
   }
 
   return items;
-}
-
-function extractRefs(content, pattern) {
-  return [...content.matchAll(pattern)].map(m => m[1].toUpperCase());
 }
 
 /**

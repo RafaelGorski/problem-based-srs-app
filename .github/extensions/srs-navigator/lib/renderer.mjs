@@ -1940,7 +1940,7 @@ export function renderGraphHtml(graphData, options = {}) {
       }
 
       let html = '<span class="node-badge" style="background:' + colors.fill + '">' + smallIcon + ' ' + colors.fullLabel + '</span>';
-      html += '<div class="node-id-text">' + node.id + '</div>';
+      html += '<div class="node-id-text">' + escapeHtml(node.id) + '</div>';
       html += '<h3 class="node-title">' + escapeHtml(node.label) + '</h3>';
 
       // Hot-spot insight
@@ -1980,7 +1980,7 @@ export function renderGraphHtml(graphData, options = {}) {
           for (const id of upstream) {
             const n = nodes.find(x => x.id === id);
             const c = n ? nodeColors[n.type] : nodeColors.need;
-            html += '<span class="conn-badge" data-id="' + id + '" style="border-color:' + c.fill + ';color:' + c.fill + '">' + id + '</span>';
+            html += '<span class="conn-badge" data-id="' + escapeHtml(id) + '" style="border-color:' + c.fill + ';color:' + c.fill + '">' + escapeHtml(id) + '</span>';
           }
           html += '</div>';
         }
@@ -1989,7 +1989,7 @@ export function renderGraphHtml(graphData, options = {}) {
           for (const id of downstream) {
             const n = nodes.find(x => x.id === id);
             const c = n ? nodeColors[n.type] : nodeColors.need;
-            html += '<span class="conn-badge" data-id="' + id + '" style="border-color:' + c.fill + ';color:' + c.fill + '">' + id + '</span>';
+            html += '<span class="conn-badge" data-id="' + escapeHtml(id) + '" style="border-color:' + c.fill + ';color:' + c.fill + '">' + escapeHtml(id) + '</span>';
           }
           html += '</div>';
         }

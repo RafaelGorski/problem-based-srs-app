@@ -14,8 +14,9 @@ import { parseSpecificationData, buildGraphData, convertJSONToSpecificationData 
 import { validateSpecificationJSON, validateReferenceIntegrity } from "./lib/validation.mjs";
 import { renderGraphHtml } from "./lib/renderer.mjs";
 import { DEMO_SPEC } from "./lib/demo-spec.mjs";
-import { compileAndSave, compileSpecFromFolder } from "./lib/spec-compiler.mjs";
+import { compileAndSave } from "./lib/spec-compiler.mjs";
 import { decomposeNode } from "./lib/decompose.mjs";
+import { isTrustedLoopbackRequest } from "./lib/http-guard.mjs";
 
 // Content fingerprint of a graph, used to detect *any* change to the loaded
 // specification (not just node/link count changes) so the canvas can reload
@@ -141,6 +142,33 @@ function loadAndBuildGraph(specJSON) {
         throw new CanvasError("empty_spec", "No nodes could be created from the specification");
     }
     return { graphData, specData, specName: validation.data.name };
+}
+
+/**
+ * Locally decompose a node into child items, rebuild the instance's graph and
+ * HTML, and persist the result to the source file when one is known. Shared by
+ * the `/api/decompose` route and the `decompose_node` canvas action so the
+ * mutate-and-persist sequence lives in one place.
+ *
+ * Returns { nodeId, added, ids, nodeCount }. Throws if the node id is unknown.
+ */
+async function applyDecompose(entry, rawNodeId) {
+    const nodeId = String(rawNodeId).toUpperCase();
+    const baseSpec = graphToSpec(entry.graphData);
+    const result = decomposeNode(baseSpec, nodeId);
+    if (!result.added.length) {
+        return { nodeId, added: 0, ids: [], nodeCount: entry.graphData.nodes.length };
+    }
+
+    const fullSpec = { name: entry.specName, version: "1.0", ...result.spec };
+    const built = loadAndBuildGraph(fullSpec);
+    entry.graphData = built.graphData;
+    entry.html = renderGraphHtml(built.graphData, { title: entry.specName, isDemo: false });
+    entry.isLanding = false;
+    if (entry.sourceFilePath) {
+        try { await writeFile(entry.sourceFilePath, JSON.stringify(fullSpec, null, 2), "utf-8"); } catch { /* best-effort persist */ }
+    }
+    return { nodeId, added: result.added.length, ids: result.added.map((i) => i.id), nodeCount: built.graphData.nodes.length };
 }
 
 /**
@@ -304,6 +332,16 @@ function createCanvasServer(instanceId, fallbackHtml, workspacePath) {
     return createServer((req, res) => {
         const inst = instances.get(instanceId);
 
+        // Harden the loopback API against CSRF / DNS-rebinding: every /api/*
+        // call must come from this server's own loopback origin. The page HTML
+        // itself (no /api prefix) stays reachable for the initial canvas load.
+        if (req.url.startsWith("/api/")) {
+            const { host, origin, referer } = req.headers;
+            if (!isTrustedLoopbackRequest({ host, origin, referer }, req.socket.localPort)) {
+                return sendJson(res, { error: "forbidden" }, 403);
+            }
+        }
+
         if (req.url === "/api/check-spec" && req.method === "GET") {
             (async () => {
                 try {
@@ -372,17 +410,8 @@ function createCanvasServer(instanceId, fallbackHtml, workspacePath) {
                 try {
                     const { nodeId } = JSON.parse(await readBody(req));
                     if (!inst || !nodeId) return sendJson(res, { ok: false, added: 0 });
-                    const base = graphToSpec(inst.graphData);
-                    const result = decomposeNode(base, String(nodeId).toUpperCase());
-                    if (!result.added.length) return sendJson(res, { ok: true, added: 0 });
-                    const built = loadAndBuildGraph({ name: inst.specName, version: "1.0", ...result.spec });
-                    inst.graphData = built.graphData;
-                    inst.html = renderGraphHtml(built.graphData, { title: inst.specName, isDemo: false });
-                    inst.isLanding = false;
-                    if (inst.sourceFilePath) {
-                        try { await writeFile(inst.sourceFilePath, JSON.stringify({ name: inst.specName, version: "1.0", ...result.spec }, null, 2), "utf-8"); } catch { /* best-effort */ }
-                    }
-                    sendJson(res, { ok: true, added: result.added.length, ids: result.added.map(i => i.id) });
+                    const r = await applyDecompose(inst, nodeId);
+                    sendJson(res, { ok: true, added: r.added, ids: r.ids });
                 } catch (e) { sendJson(res, { ok: false, added: 0, error: e.message }, 400); }
             })();
             return;
@@ -754,30 +783,20 @@ const session = await joinSession({
                         const entry = instances.get(ctx.instanceId);
                         if (!entry) throw new CanvasError("not_open", "Canvas instance not found");
 
-                        const baseSpec = graphToSpec(entry.graphData);
-                        const nodeId = ctx.input.nodeId.toUpperCase();
-                        let result;
+                        let r;
                         try {
-                            result = decomposeNode(baseSpec, nodeId);
+                            r = await applyDecompose(entry, ctx.input.nodeId);
                         } catch (e) {
                             throw new CanvasError("not_found", e.message);
                         }
-                        if (!result.added.length) {
-                            return { added: 0, message: `Node ${nodeId} has no decomposable sub-items` };
-                        }
-
-                        const built = loadAndBuildGraph({ name: entry.specName, version: "1.0", ...result.spec });
-                        entry.graphData = built.graphData;
-                        entry.html = renderGraphHtml(built.graphData, { title: entry.specName, isDemo: false });
-                        entry.isLanding = false;
-                        if (entry.sourceFilePath) {
-                            try { await writeFile(entry.sourceFilePath, JSON.stringify({ name: entry.specName, version: "1.0", ...result.spec }, null, 2), "utf-8"); } catch { /* best-effort persist */ }
+                        if (!r.added) {
+                            return { added: 0, message: `Node ${r.nodeId} has no decomposable sub-items` };
                         }
                         return {
-                            added: result.added.length,
-                            ids: result.added.map(i => i.id),
-                            nodeCount: built.graphData.nodes.length,
-                            message: `Decomposed ${nodeId} into ${result.added.length} item(s) locally`
+                            added: r.added,
+                            ids: r.ids,
+                            nodeCount: r.nodeCount,
+                            message: `Decomposed ${r.nodeId} into ${r.added} item(s) locally`
                         };
                     }
                 }

@@ -3,6 +3,7 @@
 
 import { readFile, readdir, writeFile, stat } from "node:fs/promises";
 import { join, basename } from "node:path";
+import { extractRefs } from "./text-refs.mjs";
 
 /**
  * Scan .spec/ folder for markdown artifacts and compile into a JSON specification.
@@ -201,6 +202,3 @@ function parseSingleRequirement(content, prefix, fallbackId) {
     return { id, title, description, needIds };
 }
 
-function extractRefs(content, pattern) {
-    return [...(content || "").matchAll(pattern)].map(m => m[0].toUpperCase());
-}
