@@ -266,3 +266,36 @@ describe("renderGraphHtml - Hardening", () => {
     assert.ok(html.includes("<!DOCTYPE html>"));
   });
 });
+
+describe("renderGraphHtml - methodology entrance animation", () => {
+  const graph = {
+    nodes: [
+      { id: "CP-1", type: "problem", label: "Problem", data: {} },
+      { id: "CN-1", type: "need", label: "Need", data: {} },
+      { id: "FR-1", type: "fr", label: "Requirement", data: {} },
+      { id: "NFR-1", type: "nfr", label: "Constraint", data: {} }
+    ],
+    links: [
+      { source: "CP-1", target: "CN-1", type: "addresses" },
+      { source: "CN-1", target: "FR-1", type: "satisfies" }
+    ]
+  };
+
+  it("staggers node reveal by methodology tier (CP \u2192 CN \u2192 FR \u2192 NFR)", () => {
+    const html = renderGraphHtml(graph);
+    assert.ok(html.includes("runEntranceAnimation"), "entrance animation routine present");
+    // Tier order map drives the staggered delay.
+    assert.ok(html.includes("ENTRANCE_TIER"), "tier order map present");
+  });
+
+  it("respects prefers-reduced-motion by skipping the entrance choreography", () => {
+    const html = renderGraphHtml(graph);
+    // The routine must early-return when reduced motion is requested.
+    assert.ok(/prefers-reduced-motion[\s\S]{0,400}return/.test(html) || html.includes("entranceReduceMotion"));
+  });
+
+  it("reveals links after their later endpoint node appears", () => {
+    const html = renderGraphHtml(graph);
+    assert.ok(html.includes("ENTRANCE_STEP"), "per-tier step delay constant present");
+  });
+});

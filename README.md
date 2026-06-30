@@ -19,6 +19,8 @@ Renders Problem-Based SRS (Software Requirements Specification) documents as an 
 
 Engineers can explore traceability (problem → need → requirement), filter by analysis mode, search nodes, and inspect detailed dependencies — all inside the Copilot side panel without leaving their editor.
 
+On load, the graph reveals itself in methodology order — Customer Problems first, then the Needs they motivate, then Functional and Non-Functional Requirements — so the **CP → CN → FR** structure reads as the methodology unfolding rather than appearing all at once. The entrance animation respects `prefers-reduced-motion`.
+
 ### 2. Problem-Based SRS Methodology Skills (Tools)
 
 The extension bundles all **9 methodology skills** from [Problem-Based SRS](https://github.com/RafaelGorski/Problem-Based-SRS) as agent tools. Once installed, engineers can invoke any step of the methodology directly:

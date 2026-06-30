@@ -7,6 +7,7 @@ An interactive force-directed graph visualization for **Problem-Based SRS** spec
 ## Features
 
 - **Interactive D3.js graph** — Force-directed layout showing relationships between problems, needs, and requirements
+- **Methodology entrance animation** — On load, nodes reveal in Problem-Based SRS order (CP → CN → FR → NFR) so the structure reads as the methodology unfolding; respects `prefers-reduced-motion`
 - **Analysis modes** — Switch between "All", "Problem Focus" (problems + needs), and "Implementation" (needs + requirements) views
 - **Search & filter** — Find nodes by ID or label text, toggle node types via the legend
 - **Detail panel** — Click any node to see its full description and connections

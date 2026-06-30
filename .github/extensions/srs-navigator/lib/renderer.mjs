@@ -2183,6 +2183,52 @@ export function renderGraphHtml(graphData, options = {}) {
     // Initial visibility
     updateVisibility();
 
+    // === Methodology entrance animation ===
+    // Reveal the graph in Problem-Based SRS order — Customer Problems first,
+    // then the Needs they motivate, then Functional and Non-Functional
+    // Requirements — so the structure reads as the methodology unfolding
+    // (ember -> teal -> indigo -> rose) rather than appearing all at once.
+    (function runEntranceAnimation() {
+      const ENTRANCE_TIER = { problem: 0, need: 1, fr: 2, nfr: 3 };
+      const ENTRANCE_STEP = 380;   // ms between methodology tiers
+      const NODE_DUR = 460;        // node fade duration
+      const LINK_DUR = 340;        // link fade duration
+
+      const entranceReduceMotion = typeof window.matchMedia === "function"
+        && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      if (entranceReduceMotion) return; // graph is already visible by default
+
+      const tierOf = (t) => (ENTRANCE_TIER[t] != null ? ENTRANCE_TIER[t] : 0);
+      const nodeTypeById = (id) => {
+        const n = nodes.find(x => x.id === id);
+        return n ? n.type : undefined;
+      };
+
+      // Hide, then stagger the reveal by methodology tier.
+      nodeElements.style("opacity", 0);
+      linkElements.style("opacity", 0);
+
+      nodeElements
+        .transition("entrance")
+        .delay(d => tierOf(d.type) * ENTRANCE_STEP)
+        .duration(NODE_DUR)
+        .ease(d3.easeCubicOut)
+        .style("opacity", 1);
+
+      // Links fade in just after their later endpoint lands, so each
+      // CP -> CN -> FR connection draws once both ends exist.
+      linkElements
+        .transition("entrance")
+        .delay(d => {
+          const s = typeof d.source === "object" ? d.source.type : nodeTypeById(d.source);
+          const t = typeof d.target === "object" ? d.target.type : nodeTypeById(d.target);
+          return Math.max(tierOf(s), tierOf(t)) * ENTRANCE_STEP + NODE_DUR * 0.45;
+        })
+        .duration(LINK_DUR)
+        .ease(d3.easeCubicOut)
+        .style("opacity", 1);
+    })();
+
     // Handle resize
     window.addEventListener("resize", () => {
       simulation.force("center", d3.forceCenter(container.clientWidth / 2, container.clientHeight / 2));
